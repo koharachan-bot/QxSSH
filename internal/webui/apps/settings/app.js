@@ -1,5 +1,5 @@
 import {
-  bootApp, setTheme, setGlass, applyWallpaper, applyTaskbar, listApps,
+  bootApp, setTheme, setGlass, applyTaskbar, listApps, openApp,
   notifyPermChanged, notifySessionRevoked, onThemeChange,
 } from '/assets/js/app-bridge.js';
 
@@ -10,7 +10,6 @@ import {
   permCatalog, permGrants, permGrant, permRevoke, permClear,
   auditNote,
 } from '/assets/js/core/qxssh-api.js';
-import { uploadWallpaper as wallpaperUpload, deleteWallpaper as wallpaperDelete } from '/assets/js/core/wallpapers.js';
 import { collectHostInfo } from '/assets/js/core/hostprobe.js';
 import { toast, confirmAction } from '/assets/js/core/ui.js';
 import { readCachedPref, setPref } from '/assets/js/core/prefs.js';
@@ -23,26 +22,9 @@ import {
   getGlassAlpha, setGlassAlpha, resetGlassAlpha, GLASS_MIN, GLASS_MAX,
 } from '/assets/js/desktop/glass.js';
 import {
-  getMode, getColorWallpaper, getWallpaperItems, getSelectedWallpaperName, getDefaultWallpaper,
-  resetWallpaper, setColorWallpaper, selectWallpaper, settleSelectionAfterDelete, loadWallpapers,
-  getWallpaperFit, setWallpaperFit, wallpaperFitStyle,
-  getTextureItems, getSelectedTexture, getTextureBase, getTextureLine, getTextureAlpha,
-  getTextureDensity, textureTileSize, setTextureDensity,
-  selectTexture, setTextureColors, TARGET_DESKTOP, TARGET_BOOT,
-  TIER_LIGHT, TIER_DARK, currentTier,
-  TEX_ALPHA_MIN, TEX_ALPHA_MAX, TEX_DENSITY_MIN, TEX_DENSITY_MAX,
-} from '/assets/js/desktop/wallpaper.js';
-import {
   card, sectionTitle, keyValue, chipGroup, segmented, sidebarSections, spinner, emptyState, errorState,
   searchBox, badge, Collapsible, icon,
 } from '/assets/js/core/components.js';
-
-const PRESET_COLORS = [
-  '#1a1a2e', '#16213e', '#0f3460', '#533483',
-  '#1e3a5f', '#2c3e50', '#34495e', '#2d3436',
-  '#1b1b1b', '#2b2b2b', '#3d2c2e', '#1f2937',
-  '#065f46', '#14532d', '#7c2d12', '#881337',
-];
 
 const TAB_DEFS = [
   { id: 'system', key: 'app.settings.tab-host', icon: 'server' },
@@ -62,12 +44,7 @@ function boot(el, ctx) {
 
   const hostCfg = signal(null);
 
-  const wallTarget = signal(TARGET_DESKTOP);
-  const wallTier = signal(currentTier());
-  const uploading = signal(false);
-  const wallLoaded = signal(false);
-  const wallRev = signal(0);
-  const liveColor = signal('');
+
 
   const glassAlpha = signal(typeof ctx.glass === 'number' ? ctx.glass : getGlassAlpha());
   const themeMode = signal(readCachedPref('qx-theme') || ctx.themeMode || 'system');
@@ -111,7 +88,6 @@ function boot(el, ctx) {
     return permLoadP;
   }
 
-  const touchWall = () => { wallRev.next = wallRev.value + 1; };
 
   const broadcastGlass = debounce((v) => setGlass(v), 80);
 
@@ -184,328 +160,26 @@ function boot(el, ctx) {
     ]);
   }
 
-  async function removeWallpaper(name) {
-    const target = wallTarget.value;
-    const tier = wallTier.value;
-    const ok = await confirmAction(t('app.settings.action-delete-wallpaper'), tf('app.settings.confirm-delete-body', { v1: name }));
-    if (!ok) return;
-    try {
-      await wallpaperDelete(name);
-      await loadWallpapers(true);
-      const switched = settleSelectionAfterDelete(name, target, tier);
-      if (target === TARGET_DESKTOP && tier === currentTier()) applyWallpaper();
-      touchWall();
-      toast(switched ? tf('app.settings.deleted-switched', { v1: name }) : tf('app.settings.deleted', { v1: name }), 'success');
-    } catch (err) {
-      toast(t('app.settings.delete-failed') + (err.message || err), 'error');
-    }
-  }
-
+  // 壁纸的增删与挑选已经全部搬进「壁纸猫猫」，设置页只留一个入口，
+  // 避免两处各写一套壁纸状态（旧代码在这里维护了 300 行重复逻辑）。
   function wallpaperTree() {
-    if (!wallLoaded.value) return spinner(t('app.settings.wallpaper-loading'));
-    void wallRev.value;
-    const target = wallTarget.value;
-    const tier = wallTier.value;
-    const isBoot = target === TARGET_BOOT;
-    const mode = getMode(target, tier);
-    const currentColor = getColorWallpaper(target, tier);
-    const items = getWallpaperItems();
-    const selected = getSelectedWallpaperName(target, tier);
-    const textures = getTextureItems();
-
-    const refresh = () => { if (!isBoot) applyWallpaper(); };
-    const note = (what) => auditNote('wallpaper', `${isBoot ? 'boot' : 'desktop'} ${tier} ${what}`);
-
-    const targetSeg = segmented([
-      { value: TARGET_DESKTOP, label: t('app.settings.wallpaper-desktop') },
-      { value: TARGET_BOOT, label: t('app.settings.wallpaper-boot') },
-    ], target, (v) => {
-      wallTarget.next = v;
-      liveColor.next = '';
-    });
-
-    const tierSeg = segmented([
-      { value: TIER_LIGHT, label: t('app.settings.wallpaper-tier-light') },
-      { value: TIER_DARK, label: t('app.settings.wallpaper-tier-dark') },
-    ], tier, (v) => {
-      wallTier.next = v;
-      liveColor.next = '';
-    });
-
-    const fileInput = { current: null };
-
-    const texBase = getTextureBase(target, tier);
-    const texLine = getTextureLine(target, tier);
-    const texA = getTextureAlpha(target, tier);
-    const texDensity = getTextureDensity(target, tier);
-    const texName = (getSelectedTexture(target, tier) || {}).name || '';
-
-    const texOverlay = `color-mix(in srgb, ${texLine} ${(texA * 100).toFixed(1)}%, transparent)`;
-    const texSwatch = (tex) => ({
-      backgroundColor: texBase,
-      backgroundImage: `linear-gradient(${texOverlay} 0 100%)`,
-      maskImage: `url("${tex ? tex.url : ''}")`,
-      WebkitMaskImage: `url("${tex ? tex.url : ''}")`,
-      maskSize: textureTileSize(tex, target, tier),
-      WebkitMaskSize: textureTileSize(tex, target, tier),
-      maskRepeat: 'repeat',
-      WebkitMaskRepeat: 'repeat',
-    });
-
-    function previewStyle() {
-      if (mode === 'color') return { backgroundColor: liveColor.value || currentColor };
-      if (mode === 'texture') {
-        return texSwatch(getSelectedTexture(target, tier));
-      }
-      return {
-        backgroundImage: `url("${getDefaultWallpaper(target, tier)}")`,
-        ...wallpaperFitStyle(getWallpaperFit(target, tier)),
-      };
-    }
-    const preview = h('div', { class: 'st-wall-preview', style: previewStyle() });
-
-    const colorInput = h('input', {
-      type: 'color', value: currentColor, class: 'st-color-native',
-      onInput: (ev) => {
-        setColorWallpaper(ev.target.value, target, tier);
-        liveColor.next = ev.target.value;
-        refresh();
-      },
-      onChange: (ev) => {
-        note(`color ${ev.target.value}`);
-        liveColor.next = '';
-        touchWall();
-      },
-    });
-
-    const chips = chipGroup([
-      { id: 'image', label: t('app.settings.type-image'), icon: 'image' },
-      { id: 'color', label: t('app.settings.type-solid'), icon: 'sun' },
-      { id: 'texture', label: t('app.settings.type-texture'), icon: 'layers' },
-    ], mode, (id) => {
-      if (id === 'image') {
-        resetWallpaper(target, tier); refresh();
-        note('reset');
-        toast(t('app.settings.wallpaper-default-restored'), 'success');
-      } else if (id === 'color') {
-        setColorWallpaper(currentColor, target, tier); refresh();
-        note(`color ${currentColor}`);
-        toast(t('app.settings.solid-applied'), 'success');
-      } else if (textures.length) {
-        const cur = getSelectedTexture(target, tier);
-        selectTexture(cur ? cur.name : textures[0].name, target, tier);
-        refresh();
-        note(`texture ${(cur || textures[0]).name}`);
-        toast(t('app.settings.texture-applied'), 'success');
-      } else {
-        toast(t('app.settings.texture-none'), 'warning');
-        return;
-      }
-      touchWall();
-    }, { cls: 'st-chips' });
-
-    const uploadBtn = h('button', {
-      class: 'btn btn-primary btn-sm st-wall-upload',
-      disabled: uploading.value,
-      html: `${icon('upload', 'qicon qicon-sm')}<span>${
-        uploading.value ? t('app.settings.uploading') : t('app.settings.action-upload')}</span>`,
-      onClick: () => { if (fileInput.current) fileInput.current.click(); },
-    });
-
-    const isOn = (w) => mode === 'image' && selected === w.name;
-    const thumb = (w) => h('button', {
-      key: w.name,
-      class: `st-wall-thumb${isOn(w) ? ' active' : ''}`,
-      style: { backgroundImage: `url("${w.url}")` },
-      dataset: { tip: w.name },
-      onClick: () => {
-        selectWallpaper(w.name, target, tier);
-        refresh();
-        note(`select ${w.name}`);
-        touchWall();
-      },
-    });
-
-    const builtinItems = items.filter((w) => w.builtin);
-    const myItems = items.filter((w) => !w.builtin);
-    const gridOf = (list, withDel) => h('div', { class: 'st-wall-grid' },
-      list.map((w) => h('div', { key: w.name, class: 'st-wall-item' }, [
-        thumb(w),
-        withDel ? h('button', {
-          class: 'st-wall-del',
-          type: 'button',
-          'aria-label': tf('app.settings.delete-wallpaper', { v1: (w.name) }),
-          dataset: { tip: t('app.settings.delete-this-wallpaper') },
-          html: icon('trash-2', 'qicon qicon-sm'),
-          onClick: () => removeWallpaper(w.name),
-        }) : null,
-      ])));
-
-    const GROUPS = [
-      { key: 'light', title: t('app.settings.scope-light') },
-      { key: 'dark', title: t('app.settings.scope-dark') },
-      { key: 'any', title: t('app.settings.scope-both') },
-    ];
-    const groupOf = (list) => GROUPS
-      .map(({ key, title }) => ({ title, list: list.filter((w) => (w.theme || 'any') === key) }))
-      .filter((g) => g.list.length);
-    function builtinSections() {
-      const groups = groupOf(builtinItems);
-      if (groups.length < 2) return [gridOf(builtinItems, false)];
-      return groups.map((g) => h('div', { key: g.title, class: 'st-wall-sub' }, [
-        sectionTitle(g.title), gridOf(g.list, false),
-      ]));
-    }
-
-    const colorPresets = h('div', { class: 'st-color-presets' }, [
-      ...PRESET_COLORS.map((c) => h('button', {
-        key: c,
-        class: `st-color-dot${mode === 'color' && currentColor === c ? ' active' : ''}`,
-        style: { backgroundColor: c },
-        dataset: { tip: c },
-        onClick: () => {
-          setColorWallpaper(c, target, tier);
-          refresh();
-          note(`color ${c}`);
-          toast(t('app.settings.solid-applied'), 'success');
-          touchWall();
-        },
-      })),
-      h('div', { class: 'st-color-custom' }, [colorInput, h('span', { text: t('app.settings.custom') })]),
-    ]);
-
-    const fitChips = mode === 'image' ? chipGroup([
-      { id: 'cover', label: t('app.settings.fit-fill') },
-      { id: 'contain', label: t('app.settings.fit-contain') },
-      { id: 'fill', label: t('app.settings.fit-stretch') },
-      { id: 'tile', label: t('app.settings.fit-tile') },
-      { id: 'center', label: t('app.settings.fit-center') },
-    ], getWallpaperFit(target, tier), (id) => {
-      setWallpaperFit(id, target, tier);
-      refresh();
-      note(`fit ${id}`);
-      touchWall();
-    }, { cls: 'st-chips' }) : null;
-
-    const texGrid = textures.length
-      ? h('div', { class: 'st-tex-grid' }, textures.map((tex) => h('button', {
-        key: tex.name,
-        class: `st-tex-thumb${texName === tex.name ? ' active' : ''}`,
-        type: 'button',
-        dataset: { tip: `${tex.name} · ${tex.w}×${tex.h}` },
-        onClick: () => {
-          selectTexture(tex.name, target, tier);
-          refresh();
-          note(`texture ${tex.name}`);
-          touchWall();
-        },
-      }, [h('span', { class: 'st-tex-inner', style: texSwatch(tex) })])))
-      : h('div', { class: 'st-wall-empty', text: t('app.settings.texture-none-short') });
-
-    const colorField = (label, field, value, apply) => h('div', { class: 'st-tex-field' }, [
-      h('span', { class: 'st-tex-label', text: label }),
-      h('input', {
-        type: 'color', value, class: 'st-color-native', 'aria-label': label,
-        onInput: (ev) => {
-          apply({ [field]: ev.target.value });
-          refresh();
-        },
-        onChange: (ev) => { note(`${label} ${ev.target.value}`); touchWall(); },
-      }),
-    ]);
-
-    const alphaRange = h('input', {
-      class: 'st-glass-range', type: 'range',
-      min: String(TEX_ALPHA_MIN), max: String(TEX_ALPHA_MAX), step: '0.01',
-      value: String(texA), 'aria-label': t('app.settings.texture-opacity-label'),
-      onInput: (ev) => {
-        setTextureColors({ alpha: Number(ev.target.value) }, target, tier);
-        refresh();
-      },
-      onChange: (ev) => { note(`alpha ${ev.target.value}`); touchWall(); },
-    });
-
-    const densityRange = h('input', {
-      class: 'st-glass-range', type: 'range',
-      min: String(TEX_DENSITY_MIN), max: String(TEX_DENSITY_MAX), step: '0.05',
-      value: String(texDensity), 'aria-label': t('app.settings.texture-density-label'),
-      onInput: (ev) => { setTextureDensity(Number(ev.target.value), target, tier); refresh(); },
-      onChange: (ev) => { note(`density ${ev.target.value}`); touchWall(); },
-    });
-
-    const texSection = mode === 'texture' ? h('div', { class: 'st-wall-section' }, [
-      sectionTitle(tf('app.settings.texture-pick', { v1: (textures.length) })),
-      texGrid,
-      sectionTitle(t('app.settings.field-colors')),
-      h('div', { class: 'st-tex-colors' }, [
-        colorField(t('app.settings.texture-bg'), 'base', texBase, (p) => setTextureColors(p, target, tier)),
-        colorField(t('app.settings.texture-line'), 'line', texLine, (p) => setTextureColors(p, target, tier)),
-      ]),
-      h('div', { class: 'st-tex-field st-tex-alpha' }, [
-        h('span', { class: 'st-tex-label', text: t('app.settings.texture-opacity') }),
-        alphaRange,
-      ]),
-      h('div', { class: 'st-tex-field st-tex-alpha' }, [
-        h('span', { class: 'st-tex-label', text: t('app.settings.texture-density') }),
-        densityRange,
-      ]),
-    ]) : null;
-
     return card(t('app.settings.wallpaper-title'), [
-      h('div', { class: 'st-wall-targets' }, [
-        h('div', { class: 'st-wall-targetbar' }, [
-          h('span', { class: 'st-wall-targetlb', text: t('app.settings.field-target') }),
-          targetSeg,
-        ]),
-        h('div', { class: 'st-wall-targetbar' }, [
-          h('span', { class: 'st-wall-targetlb', text: t('app.settings.field-wallpaper-tier') }),
-          tierSeg,
+      h('div', { class: 'st-wall-moved' }, [
+        h('span', { class: 'st-wall-moved-ic', html: icon('image', 'qicon') }),
+        h('div', { class: 'st-wall-moved-main' }, [
+          h('span', { class: 'st-wall-moved-title', text: t('app.settings.wallpaper-moved-title') }),
+          h('p', { class: 'st-glass-hint', text: t('app.settings.wallpaper-moved-body') }),
         ]),
       ]),
-      chips,
-      mode === 'image' && builtinItems.length
-        ? h('div', { class: 'st-wall-section' }, [sectionTitle(t('app.settings.wallpaper-system')), ...builtinSections()])
-        : null,
-      mode === 'image'
-        ? h('div', { class: 'st-wall-section' }, [
-          sectionTitle(myItems.length ? t('app.settings.wallpaper-mine') : t('app.settings.wallpaper-mine-empty')),
-          uploadBtn,
-          myItems.length ? gridOf(myItems, true)
-            : h('div', { class: 'st-wall-empty', text: t('app.settings.wallpaper-none-uploaded') }),
-        ])
-        : null,
-      mode === 'color'
-        ? h('div', { class: 'st-color-section' }, [sectionTitle(t('app.settings.field-presets')), colorPresets])
-        : null,
-      texSection,
-      fitChips ? sectionTitle(t('app.settings.field-fit')) : null,
-      fitChips,
-      sectionTitle(t('app.settings.preview')),
-      preview,
-      h('input', {
-        ref: fileInput,
-        type: 'file', accept: 'image/*', hidden: true,
-        onChange: async (ev) => {
-          const file = ev.target.files && ev.target.files[0];
-          ev.target.value = '';
-          if (!file) return;
-          uploading.next = true;
+      h('button', {
+        class: 'btn btn-primary btn-sm',
+        type: 'button',
+        html: `${icon('image', 'qicon qicon-sm')}<span>${t('app.settings.wallpaper-open')}</span>`,
+        onClick: () => {
           try {
-            const { wallpaper } = await wallpaperUpload(file);
-            await loadWallpapers(true);
-            const shown = selectWallpaper(wallpaper.name, target, tier);
-            refresh();
-            touchWall();
-            if (shown) {
-              toast(tf('app.settings.uploaded-applied', { v1: (wallpaper.name) }), 'success');
-            } else {
-              toast(tf('app.settings.uploaded-not-found', { v1: (wallpaper.name) })
-                + t('app.settings.uploaded-retry-hint'), 'warning');
-            }
-          } catch (err) {
-            toast(t('app.settings.upload-failed') + (err.message || err), 'error');
-          } finally {
-            uploading.next = false;
+            openApp('wallpapercat');
+          } catch {
+            toast(t('app.settings.wallpaper-open-failed'), 'error');
           }
         },
       }),
@@ -861,10 +535,7 @@ function boot(el, ctx) {
     if (t === 'apps') ensurePermData().catch(() => { });
   });
 
-  loadWallpapers(true).then(() => {
-    wallLoaded.next = true;
-    touchWall();
-  });
+
 
   return () => {
     offTheme();

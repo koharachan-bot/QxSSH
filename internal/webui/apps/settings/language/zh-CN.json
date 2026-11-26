@@ -135,5 +135,9 @@
   "app.settings.action-revoke-tokens": "一键吊销令牌",
   "app.settings.revoke-tokens-success": "已成功吊销该应用的所有会话令牌",
   "app.settings.revoke-tokens-failed": "吊销会话令牌失败：",
-  "app.settings.action-restore-defaults": "恢复默认"
+  "app.settings.action-restore-defaults": "恢复默认",
+  "app.settings.wallpaper-moved-title": "壁纸已集中到「壁纸猫猫」",
+  "app.settings.wallpaper-moved-body": "图片、视频、交互壁纸、纹理、纯色、轮播与播放设置都在壁纸猫猫里统一管理；这里只保留入口，避免两处设置打架。",
+  "app.settings.wallpaper-open": "打开壁纸猫猫",
+  "app.settings.wallpaper-open-failed": "打不开壁纸猫猫：它可能已被禁用，请到应用管理器重新启用"
 }

@@ -8,7 +8,9 @@ import { h, createView } from '../core/vdom.js';
 import { signal, effect } from '../core/signal.js';
 import { loadHosts, getState, subscribe } from '../core/store.js';
 import { probeHost, prefsAll } from '../core/qxssh-api.js';
-import { readCachedPref, setPref, loadPrefs } from '../core/prefs.js';
+import {
+  readCachedPref, setPref, loadPrefs, prefSignal,
+} from '../core/prefs.js';
 import { applyWallpaper, TARGET_BOOT } from '../desktop/wallpaper.js';
 import { openHostForm } from './host-form.js';
 import { toast } from '../core/ui.js';
@@ -20,6 +22,9 @@ import { icon } from '../icons/index.js';
 
 const PROBE_CONCURRENCY = 4;
 const PROBE_INTERVAL_MS = 15000;
+
+const VIEW_KEY = 'qx-boot-view';
+const LOST_PARAM = 'lost';
 
 const node = { search: null, group: null };
 
@@ -39,6 +44,9 @@ const loadErr = signal('');
 const themeTick = signal(0);
 
 const tick = signal(0);
+
+/** 视图模式偏好：list（列表式，默认）或 card（卡片式） */
+const viewMode = prefSignal(VIEW_KEY, 'list', { json: false });
 
 let prober = null;
 
@@ -160,10 +168,10 @@ function latencyCell(st) {
   ]);
 }
 
-function osIconCell(host) {
+function osIconCell(host, cls = 'boot-os') {
   const osId = osIds.value.get(host.id) || host.osId || 'linux';
   const osName = osNames.value.get(host.id) || host.osName || '';
-  return h('span', { class: 'boot-os' }, [
+  return h('span', { class: cls }, [
     h('img', {
       class: 'boot-os-icon',
       src: `/assets/images/icon/systems/${osId}.png`,
@@ -176,13 +184,7 @@ function osIconCell(host) {
 function entryRow(host, i, sel) {
   const st = probeOf(host.id);
 
-  const jump = host.jumpHostId
-    ? h('span', {
-      class: 'boot-jump',
-      dataset: { tip: tf('app.boot.host-jump-detail', { v1: (host.jumpHostName || host.jumpHostId) }) },
-      text: tf('app.boot.host-jump-short', { v1: host.jumpHostName || t('app.boot.jump-fallback') }),
-    })
-    : null;
+  const jump = jumpTag(host);
 
   return h('div', {
     key: host.id,
@@ -200,14 +202,52 @@ function entryRow(host, i, sel) {
     h('span', { class: 'boot-addr', text: `${host.user}@${host.address}:${host.port}` }),
     statusCell(st),
     latencyCell(st),
-    h('button', {
-      class: 'boot-info',
-      type: 'button',
-      html: icon('edit', 'qicon qicon-sm'),
-      'aria-label': tf('app.boot.edit-host', { v1: (host.name) }),
-      dataset: { tip: t('app.boot.edit-host-label') },
-      onClick: (e) => { e.stopPropagation(); openForm(host); },
-    }),
+    editButton(host),
+  ]);
+}
+
+function editButton(host) {
+  return h('button', {
+    class: 'boot-info',
+    type: 'button',
+    html: icon('edit', 'qicon qicon-sm'),
+    'aria-label': tf('app.boot.edit-host', { v1: (host.name) }),
+    dataset: { tip: t('app.boot.edit-host-label') },
+    onClick: (e) => { e.stopPropagation(); openForm(host); },
+  });
+}
+
+function jumpTag(host) {
+  if (!host.jumpHostId) return null;
+  return h('span', {
+    class: 'boot-jump',
+    dataset: { tip: tf('app.boot.host-jump-detail', { v1: (host.jumpHostName || host.jumpHostId) }) },
+    text: tf('app.boot.host-jump-short', { v1: host.jumpHostName || t('app.boot.jump-fallback') }),
+  });
+}
+
+function entryCard(host, i, sel) {
+  const st = probeOf(host.id);
+  const offline = stateOf(st).kind === 'offline';
+
+  return h('div', {
+    key: host.id,
+    class: `boot-card${sel ? ' sel' : ''}${offline ? ' offline' : ''}`,
+    role: 'option',
+    tabindex: '-1',
+    'aria-selected': sel ? 'true' : 'false',
+    onClick: () => { enter(host.id).catch(() => {}); },
+    onMouseenter: () => { if (selectedId.value !== host.id) selectedId.next = host.id; },
+  }, [
+    h('div', { class: 'boot-card-head' }, [
+      h('span', { class: 'boot-idx boot-card-idx', text: String(i + 1).padStart(2, '0') }),
+      osIconCell(host, 'boot-os boot-card-os'),
+      statusCell(st),
+      editButton(host),
+    ]),
+    h('div', { class: 'boot-card-name', text: host.name, title: host.name }),
+    h('div', { class: 'boot-card-addr', text: `${host.user}@${host.address}:${host.port}` }),
+    h('div', { class: 'boot-card-foot' }, [jumpTag(host), latencyCell(st)].filter(Boolean)),
   ]);
 }
 
@@ -267,6 +307,23 @@ function renderRows(buckets, selId) {
       ]));
     }
     for (const hst of b.hosts) out.push(entryRow(hst, n++, hst.id === selId));
+  }
+  return out;
+}
+
+function renderCards(buckets, selId) {
+  const heads = buckets.length >= 2;
+  const out = [];
+  let n = 0;
+  for (const b of buckets) {
+    if (heads) {
+      out.push(h('div', { key: `g-${b.name}`, class: 'boot-group boot-group-cards' }, [
+        h('span', { class: 'boot-group-name', text: b.name || t('app.boot.group-none') }),
+        h('span', { class: 'boot-group-n', text: String(b.hosts.length) }),
+      ]));
+    }
+    out.push(h('div', { key: `cards-${b.name}`, class: 'boot-cards' },
+      b.hosts.map((hst) => entryCard(hst, n++, hst.id === selId))));
   }
   return out;
 }
@@ -361,6 +418,24 @@ function SearchField() {
   ]);
 }
 
+function ViewSwitch() {
+  const mode = viewMode.value;
+  const item = (id, iconName, labelKey) => h('button', {
+    key: id,
+    class: `boot-view-btn${mode === id ? ' active' : ''}`,
+    type: 'button',
+    'aria-pressed': mode === id ? 'true' : 'false',
+    'aria-label': t(labelKey),
+    dataset: { tip: t(labelKey) },
+    html: icon(iconName, 'qicon qicon-sm'),
+    onClick: () => { viewMode.next = id; },
+  });
+  return h('div', { class: 'boot-view', role: 'group', 'aria-label': t('app.boot.view-switch') }, [
+    item('list', 'list', 'app.boot.view-list'),
+    item('card', 'layout-grid', 'app.boot.view-card'),
+  ]);
+}
+
 function ThemeButton() {
   void themeTick.value;
   const pref = readCachedPref('qx-theme') || 'system';
@@ -391,6 +466,7 @@ function HeadTools() {
   return h('div', { class: 'boot-head-tools' }, [
     h(GroupFilter),
     h(SearchField),
+    h(ViewSwitch),
     h('button', {
       class: 'btn btn-primary btn-sm boot-add',
       type: 'button',
@@ -413,8 +489,15 @@ function HostList() {
     ]);
   }
   const buckets = visibleBuckets();
-  return h('div', { class: 'boot-list', id: 'boot-entries', role: 'listbox', 'aria-label': t('app.boot.host-list') },
-    buckets.length ? renderRows(buckets, selectedId.value) : [emptyPane()]);
+  const card = viewMode.value === 'card';
+  return h('div', {
+    class: `boot-list${card ? ' boot-list-cards' : ''}`,
+    id: 'boot-entries',
+    role: 'listbox',
+    'aria-label': t('app.boot.host-list'),
+  }, buckets.length
+    ? (card ? renderCards(buckets, selectedId.value) : renderRows(buckets, selectedId.value))
+    : [emptyPane()]);
 }
 
 function FootStatus() {
@@ -435,7 +518,7 @@ text: cur ? (hint ? tf('app.boot.selected-host', { v1: cur.name, v2: hint }) : c
 
 function scrollSelectedIntoView() {
   const list = document.getElementById('boot-entries');
-  const sel = list && list.querySelector('.boot-entry.sel');
+  const sel = list && list.querySelector('.boot-entry.sel, .boot-card.sel');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
@@ -553,12 +636,34 @@ function bootPrefBlob() {
     .catch((err) => console.warn('[boot] 读取个性化偏好失败，沿用本机缓存', err));
 }
 
+/** 配置库偏好回来后校正视图模式，非法值一律回落到列表式 */
+function syncViewPref() {
+  const want = readCachedPref(VIEW_KEY) === 'card' ? 'card' : 'list';
+  if (viewMode.peek() !== want) viewMode.next = want;
+}
+
+/** 读取「连接断开」跳转参数，提示原因后清理地址栏，避免刷新时重复提示 */
+function showLostNotice() {
+  let name = '';
+  try {
+    const u = new URL(location.href);
+    name = u.searchParams.get(LOST_PARAM) || '';
+    if (!name) return;
+    u.searchParams.delete(LOST_PARAM);
+    history.replaceState(null, '', `${u.pathname}${u.search}${u.hash}`);
+  } catch {
+    return;
+  }
+  toast(tf('app.boot.conn-lost', { v1: name }), 'error');
+}
+
 function init() {
   bootPrefBlob().then(() => setupI18n(new URL('../../language', import.meta.url).href))
     .catch((err) => console.warn('[boot] 语言表加载失败，沿用默认语言', err))
     .then(() => {
   applyTheme();
   repaintWallpaper();
+  showLostNotice();
 
   createView($('#boot-root')).update(() => {
     lang();
@@ -580,6 +685,7 @@ function init() {
   prefsAll()
     .then(({ prefs }) => {
       loadPrefs(prefs);
+      syncViewPref();
       applyTheme();
       repaintWallpaper();
       themeTick.next = themeTick.value + 1;

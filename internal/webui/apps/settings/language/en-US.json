@@ -135,5 +135,9 @@
   "app.settings.action-revoke-tokens": "Revoke Tokens",
   "app.settings.revoke-tokens-success": "Successfully revoked all session tokens for this app",
   "app.settings.revoke-tokens-failed": "Failed to revoke tokens: ",
-  "app.settings.action-restore-defaults": "Restore defaults"
+  "app.settings.action-restore-defaults": "Restore defaults",
+  "app.settings.wallpaper-moved-title": "Wallpapers live in Wallpaper Cat now",
+  "app.settings.wallpaper-moved-body": "Images, videos, interactive wallpapers, textures, solid colours, rotation and playback settings are managed in Wallpaper Cat. This page only keeps the entry point so the two places cannot disagree.",
+  "app.settings.wallpaper-open": "Open Wallpaper Cat",
+  "app.settings.wallpaper-open-failed": "Cannot open Wallpaper Cat — it may be disabled; re-enable it in the app manager"
 }

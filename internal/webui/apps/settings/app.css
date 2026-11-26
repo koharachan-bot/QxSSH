@@ -214,3 +214,13 @@
 .st-perm-id { font-size: 0.7rem; color: var(--muted-foreground); }
 .st-perm-desc { flex: 1; min-width: 0; font-size: 0.78rem; color: var(--muted-foreground); line-height: 1.45; }
 .st-perm-row input[type='checkbox'] { flex: none; margin-left: auto; }
+
+.st-wall-moved {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: calc(var(--radius) * 0.55);
+  background: var(--glass-bg-soft); border: 1px solid var(--hairline);
+}
+.st-wall-moved-ic { display: inline-flex; flex: none; color: var(--primary); }
+.st-wall-moved-ic .qicon { width: 20px; height: 20px; }
+.st-wall-moved-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-wall-moved-title { font-size: 0.86rem; font-weight: 600; }

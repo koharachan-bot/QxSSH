@@ -1,0 +1,50 @@
+{
+  "id": "wallpapercat",
+  "name": "壁纸猫猫",
+  "nameKey": "core.app.wallpapercat.name",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "壁纸猫猫：统一管理图片、视频与交互壁纸，含轮播与播放设置",
+  "descriptionKey": "core.app.wallpapercat.desc",
+  "author": "QxSSH",
+  "icon": {
+    "light": "icon-light.svg",
+    "dark": "icon-dark.svg"
+  },
+  "category": "系统",
+  "categoryKey": "core.category-system",
+  "keywords": [
+    "wallpaper",
+    "bizhi",
+    "壁纸",
+    "video",
+    "动态壁纸",
+    "interactive",
+    "cat",
+    "wallpapercat"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "disableable": true,
+  "preferredSize": {
+    "width": 980,
+    "height": 680,
+    "minWidth": 640,
+    "minHeight": 460
+  },
+  "permissions": [
+    "ui:settings",
+    "ui:notify",
+    "audit:note",
+    "prefs:read",
+    "prefs:write",
+    "prefs:self:read",
+    "prefs:self:write",
+    "wallpaper:read",
+    "wallpaper:write"
+  ],
+  "systemApp": true
+}

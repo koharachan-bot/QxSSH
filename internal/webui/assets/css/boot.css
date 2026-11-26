@@ -158,6 +158,38 @@
   border-color: var(--brand-400);
 }
 
+.boot-view {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background-color: var(--glass-bg-strong);
+}
+
+.boot-view-btn {
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--glass-text-tertiary);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.boot-view-btn:hover { color: var(--glass-text-primary); }
+
+.boot-view-btn.active {
+  background: var(--brand-500);
+  color: var(--primary-foreground);
+}
+
 .boot-theme,
 .boot-info {
   display: grid;
@@ -410,6 +442,122 @@
 
 .boot-lat-tcp.na { opacity: 0.45; font-style: italic; }
 
+.boot-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.6rem;
+  padding: 0.2rem 0.1rem 0.45rem;
+}
+
+.boot-group-cards { margin-bottom: 0.1rem; }
+
+.boot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.65rem 0.75rem 0.6rem;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--radius) * 0.62);
+  background: var(--glass-bg-strong);
+  color: var(--glass-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.boot-card:hover {
+  background: var(--glass-bg-content);
+  border-color: var(--brand-400);
+  color: var(--glass-text-primary);
+  transform: translateY(-1px);
+}
+
+.boot-card.sel {
+  background: var(--glass-bg-content);
+  border-color: var(--brand-500);
+  color: var(--glass-text-primary);
+}
+
+.boot-card.offline {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.boot-card.offline:hover {
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border);
+  color: var(--glass-text-secondary);
+  transform: none;
+}
+
+.boot-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.7rem;
+}
+
+.boot-card-idx { font-size: 0.72rem; }
+
+.boot-card-os {
+  margin: 0;
+}
+
+.boot-card-os .boot-os-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.boot-card .boot-st {
+  margin-left: auto;
+  font-size: 0.74rem;
+}
+
+.boot-card .boot-info {
+  position: static;
+  translate: none;
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+.boot-card-name {
+  color: currentColor;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot-card-addr {
+  font-size: 0.72rem;
+  opacity: 0.68;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.2rem;
+  font-size: 0.72rem;
+}
+
+.boot-card-foot .boot-jump { font-size: 0.68rem; }
+
+.boot-card-foot .boot-lat {
+  margin-left: auto;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+/* 卡片空间有限：只保留 SSH 握手耗时，TCP 段留给列表视图 */
+.boot-card .boot-lat-tcp { display: none; }
+
 .boot-empty {
   padding: 2.5rem 0.25rem;
   max-width: 34rem;
@@ -459,6 +607,13 @@
     --boot-os-size: 1.6rem;
   }
 
+  .boot-cards {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  .boot-group-cards { padding-left: 0; }
+
   .boot-entry {
     grid-template-columns: 2rem var(--boot-os-size) minmax(0, 1fr) 4.8rem;
     row-gap: 0.35rem;
@@ -477,6 +632,8 @@
   .boot-head-tools {
     width: 100%;
     margin-left: 0;
+    flex-wrap: wrap;
+    row-gap: 0.45rem;
   }
 
   .boot-search { flex: 1 1 auto; }
@@ -489,5 +646,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .boot-st.probing .boot-dot { animation: none; opacity: 0.8; }
-  .boot-entry, .boot-theme, .boot-info { transition: none; }
+  .boot-entry, .boot-card, .boot-theme, .boot-info, .boot-view-btn { transition: none; }
 }
