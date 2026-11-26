@@ -133,5 +133,9 @@
   "app.store.market-update": "更新",
   "app.store.market-newer": "有新版本",
   "app.store.market-pick-version": "选择要安装的版本",
-  "app.store.market-version-hint": "切换版本（共 {v1} 个）"
+  "app.store.market-version-hint": "切换版本（共 {v1} 个）",
+  "app.store.market-loading-hint": "通常几秒内完成。若长时间无响应，多半是本机无法访问商店地址。",
+  "app.store.market-loading-slow": "已等待 {v1} 秒，仍在等待商店响应。若超过 18 秒会自动失败并给出原因。",
+  "app.store.err-catalog-timeout": "拉取商店目录超时（18 秒）。",
+  "app.store.err-catalog-advice": "可依次排查：① 确认本机能访问 https://cos.meowhead.cn/index.json（浏览器直接打开试试）；② 检查代理或防火墙是否拦截；③ 点下方「重试」。仍然失败时，宿主日志 appdata/logs/ 里会有 /api/v1/store/catalog 的具体状态码。"
 }

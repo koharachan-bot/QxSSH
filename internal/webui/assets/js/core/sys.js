@@ -77,10 +77,13 @@ function buildQuery(query) {
 }
 
 /** 通用请求：自动附加令牌与 JSON 序列化，权限不足时先申请授权再重试一次 */
-export async function sysFetch(verb, target, { query, body, form, blob, raw, _retried } = {}) {
+export async function sysFetch(verb, target, { query, body, form, blob, raw, _retried, timeoutMs } = {}) {
   const tok = await ensureToken();
   const url = `${API_BASE}/${target}${buildQuery(withAuditWS(query))}`;
   const opts = { method: verb, headers: {} };
+  // 超时：不设的话一旦服务端或上游僵住，界面会永远停在"加载中"，
+  // 用户既看不到错误也不知道该做什么。
+  if (timeoutMs) opts.signal = AbortSignal.timeout(timeoutMs);
   if (tok) opts.headers['X-Qx-Session'] = tok;
   if (form) {
     opts.body = form;
@@ -96,8 +99,12 @@ export async function sysFetch(verb, target, { query, body, form, blob, raw, _re
   try {
     res = await fetch(url, opts);
   } catch (e) {
-    const err = new Error(t('app.core.network-error') + ((e && e.message) || e));
+    const timedOut = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    const err = new Error(timedOut
+      ? t('app.core.request-timeout')
+      : t('app.core.network-error') + ((e && e.message) || e));
     err.status = 0;
+    err.timeout = !!timedOut;
     throw err;
   }
   if (!res.ok) {
@@ -122,8 +129,8 @@ export async function sysFetch(verb, target, { query, body, form, blob, raw, _re
 }
 
 /** GET 请求 */
-export function sysGet(target, query) {
-  return sysFetch('GET', target, { query });
+export function sysGet(target, query, opts = {}) {
+  return sysFetch('GET', target, { query, ...opts });
 }
 
 /** POST 请求 */

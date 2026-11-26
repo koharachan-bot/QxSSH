@@ -601,7 +601,11 @@ export function guiWsUrl(id, codec) {
   return sysWsUrl('gui/session', { id, codec });
 }
 
-/** 取应用商店目录（宿主缓存 5 分钟；返回 { catalog, source, cached?, warning? }） */
-export function storeCatalog() {
-  return sysGet('store/catalog');
+/**
+ * 取应用商店目录（宿主缓存 5 分钟；返回 { catalog, source, cached?, warning? }）
+ *
+ * opts.timeoutMs 建议传：宿主回源最长 15 秒，不传超时会让界面无限停在加载态。
+ */
+export function storeCatalog(opts = {}) {
+  return sysGet('store/catalog', undefined, opts);
 }

@@ -133,5 +133,9 @@
   "app.store.market-update": "Update",
   "app.store.market-newer": "New version",
   "app.store.market-pick-version": "Choose a version to install",
-  "app.store.market-version-hint": "Switch version ({v1} total)"
+  "app.store.market-version-hint": "Switch version ({v1} total)",
+  "app.store.market-loading-hint": "This usually takes a few seconds. If it hangs, this machine likely cannot reach the store address.",
+  "app.store.market-loading-slow": "Waited {v1}s, still waiting for the store. It will fail with a reason after 18s.",
+  "app.store.err-catalog-timeout": "Timed out after 18s while fetching the store catalog.",
+  "app.store.err-catalog-advice": "Check in order: (1) open https://cos.meowhead.cn/index.json in a browser on this machine; (2) check proxy or firewall; (3) press Retry. If it still fails, appdata/logs/ has the exact status for /api/v1/store/catalog."
 }

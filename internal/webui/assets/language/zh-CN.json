@@ -624,5 +624,6 @@
   "core.gui.decoder-failed": "视频解码初始化失败：",
   "core.gui.clipboard-copied": "已复制远端剪贴板",
   "core.gui.clipboard-sent": "已粘贴到远端",
-  "core.gui.clipboard-denied": "浏览器拒绝了剪贴板访问"
+  "core.gui.clipboard-denied": "浏览器拒绝了剪贴板访问",
+  "app.core.request-timeout": "请求超时，请稍后重试"
 }

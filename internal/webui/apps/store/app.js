@@ -78,6 +78,8 @@ function boot(el) {
   const catalog = signal(null);
   const catalogBusy = signal(false);
   const catalogErr = signal('');
+  // 加载已等待秒数，用于在界面上给出"卡了多久"，避免无限转圈却毫无信息。
+  const catalogElapsed = signal(0);
   const catalogWarn = signal('');
   const marketBusy = signal('');
   const gitDefaultBranch = signal('');
@@ -151,14 +153,22 @@ function boot(el) {
     if (catalog.value && !force) return;
     catalogBusy.next = true;
     catalogErr.next = '';
+    catalogElapsed.next = 0;
+    const timer = setInterval(() => { catalogElapsed.next = catalogElapsed.value + 1; }, 1000);
     try {
-      const r = await storeCatalog();
+      // 宿主侧回源上限 15 秒，这里留一点余量；超时必定落到 catch 并给出结论，
+      // 不再出现"一直转圈但什么都不说"的情况。
+      const r = await storeCatalog({ timeoutMs: 18000 });
       catalog.next(r && r.catalog ? r.catalog : null);
       catalogWarn.next((r && r.warning) || '');
       if (!catalog.value) catalogErr.next(t('app.store.err-catalog-empty'));
     } catch (e) {
-      catalogErr.next((e && e.message) || String(e));
+      const msg = (e && e.message) || String(e);
+      catalogErr.next(e && e.timeout
+        ? t('app.store.err-catalog-timeout')
+        : msg);
     } finally {
+      clearInterval(timer);
       catalogBusy.next = false;
     }
   }
@@ -941,18 +951,25 @@ function boot(el) {
 
   function marketBody() {
     if (catalogBusy.value && !catalog.value) {
+      const secs = catalogElapsed.value;
       return h('div', { class: 'am-state' }, [
         h('div', { class: 'am-state-title', text: t('app.store.market-loading') }),
+        h('div', { class: 'am-state-desc', text: secs >= 5
+          ? tf('app.store.market-loading-slow', { v1: secs })
+          : t('app.store.market-loading-hint') }),
       ]);
     }
     if (catalogErr.value && !catalog.value) {
       return h('div', { class: 'am-state' }, [
         h('div', { class: 'am-state-title', text: t('app.store.err-catalog-failed') }),
         h('div', { class: 'am-state-desc', text: catalogErr.value }),
-        h('button', {
-          class: 'btn btn-outline btn-sm', text: t('app.store.action-retry'),
-          onClick: () => { void loadCatalog(true); },
-        }),
+        h('div', { class: 'am-state-desc', text: t('app.store.err-catalog-advice') }),
+        h('div', { class: 'am-actions' }, [
+          h('button', {
+            class: 'btn btn-primary btn-sm', text: t('app.store.action-retry'),
+            onClick: () => { void loadCatalog(true); },
+          }),
+        ]),
       ]);
     }
     const cat = catalog.value;

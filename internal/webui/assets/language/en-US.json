@@ -624,5 +624,6 @@
   "core.gui.decoder-failed": "Failed to initialise the video decoder: ",
   "core.gui.clipboard-copied": "Remote clipboard copied",
   "core.gui.clipboard-sent": "Pasted to the remote host",
-  "core.gui.clipboard-denied": "The browser denied clipboard access"
+  "core.gui.clipboard-denied": "The browser denied clipboard access",
+  "app.core.request-timeout": "Request timed out, please retry"
 }
