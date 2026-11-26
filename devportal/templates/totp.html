@@ -3,12 +3,14 @@
   <h2>两步验证</h2>
   <p class="muted">请输入验证器应用中的 6 位验证码。手机丢失时可改用恢复码。</p>
   <form method="post" action="/login/2fa" class="form">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>验证码<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="123456" autofocus></label>
     <button class="btn" type="submit">继续</button>
   </form>
   <details class="mt12">
     <summary class="muted small">使用恢复码登录</summary>
     <form method="post" action="/login/2fa" class="form mt10">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
       <label>恢复码<input name="recovery" placeholder="abcde-12345" autocomplete="off"></label>
       <button class="btn-ghost" type="submit">用恢复码登录</button>
     </form>

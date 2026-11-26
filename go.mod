@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/go-git/go-git/v5 v5.19.3
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/pkg/sftp v1.13.11
 	golang.org/x/crypto v0.57.0

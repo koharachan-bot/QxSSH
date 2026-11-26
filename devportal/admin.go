@@ -46,6 +46,9 @@ func (s *Server) loadForReview(w http.ResponseWriter, r *http.Request) (*App, bo
 }
 
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	a, ok := s.loadForReview(w, r)
 	if !ok {
 		return
@@ -58,6 +61,9 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	a, ok := s.loadForReview(w, r)
 	if !ok {
 		return
@@ -72,6 +78,9 @@ func (s *Server) handleReject(w http.ResponseWriter, r *http.Request) {
 
 // handlePublish 上架单个应用：先置为 published，再整体重发索引。
 func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	a, ok := s.loadForReview(w, r)
 	if !ok {
 		return
@@ -96,6 +105,9 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 
 // handlePublishAll 重发整个商店索引（改了包内容或需要修复索引时使用）。
 func (s *Server) handlePublishAll(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	n, err := s.Pub.PublishAll()
 	if err != nil {
 		redirectWith(w, r, "/admin", "全量发布失败："+err.Error(), "err")

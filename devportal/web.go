@@ -48,6 +48,9 @@ type pageData struct {
 	Brand     string
 	BrandLogo string
 	SiteURL   string
+
+	// CSRF 令牌：所有表单都嵌一个 hidden，提交时与 Cookie 比对。
+	CSRF string
 }
 
 func newServer(cfg *Config, st *Store, cos *COS) (*Server, error) {
@@ -163,6 +166,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	data.Brand = s.Cfg.Brand
 	data.BrandLogo = s.Cfg.BrandLogo
 	data.SiteURL = s.Cfg.SiteURL
+	data.CSRF = s.ensureCSRF(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, name, data); err != nil {
 		fmt.Fprintf(w, "渲染页面失败：%v", err)

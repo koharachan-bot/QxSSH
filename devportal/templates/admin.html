@@ -3,6 +3,7 @@
 <div class="page-head">
   <h2>审核与上架</h2>
   <form method="post" action="/admin/publish-all">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <button class="btn-ghost" type="submit">重新发布全部</button>
   </form>
 </div>
@@ -19,8 +20,10 @@
         <td class="mono">{{.Version}}</td>
         <td class="muted">{{.Author}}</td>
         <td class="ops">
-          <form method="post" action="/admin/{{.ID}}/approve" class="inline"><button class="btn-sm" type="submit">通过</button></form>
+          <form method="post" action="/admin/{{.ID}}/approve" class="inline">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="btn-sm" type="submit">通过</button></form>
           <form method="post" action="/admin/{{.ID}}/reject" class="inline ops-reject">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
             <input name="note" placeholder="驳回理由" maxlength="200">
             <button class="btn-sm ghost" type="submit">驳回</button>
           </form>
@@ -59,7 +62,8 @@
         <td><span class="badge s-{{.Status}}">{{status .Status}}</span></td>
         <td class="ops">
           {{if eq .Status "approved"}}
-          <form method="post" action="/admin/{{.ID}}/publish" class="inline"><button class="btn-sm" type="submit">上架</button></form>
+          <form method="post" action="/admin/{{.ID}}/publish" class="inline">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="btn-sm" type="submit">上架</button></form>
           {{else}}<span class="muted small">-</span>{{end}}
         </td>
       </tr>

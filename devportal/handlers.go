@@ -30,6 +30,9 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	if !s.requireHuman(w, r, "/login") {
 		return
 	}
@@ -79,6 +82,9 @@ func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	if !s.requireHuman(w, r, "/register") {
 		return
 	}
@@ -169,6 +175,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	u := s.userOf(r)
 	id := strings.TrimSpace(r.FormValue("app_id"))
 	name := strings.TrimSpace(r.FormValue("name"))
@@ -217,6 +226,9 @@ func (s *Server) handleAppDetail(w http.ResponseWriter, r *http.Request) {
 
 // handleUpload 接收 .qxp 并就地校验，校验通过才落盘并回填清单字段。
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	id := parseID(r, "id")
 	u := s.userOf(r)
 	a, err := s.Store.AppByID(id)
@@ -263,7 +275,18 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dest := filepath.Join(s.Cfg.DataDir, "packages", fmt.Sprintf("%s-%s.qxp", a.AppID, parsed.Manifest.Version))
+	// 纵深防御：即便解析层已校验过 id 与 version，落盘前再确认一次，
+	// 并验证最终路径确实落在 packages 目录内（防止任何形式的穿越）。
+	pkgDir := filepath.Join(s.Cfg.DataDir, "packages")
+	if !appIDRe.MatchString(a.AppID) || !versionRe.MatchString(parsed.Manifest.Version) {
+		redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "应用 id 或版本号包含非法字符", "err")
+		return
+	}
+	dest := filepath.Join(pkgDir, fmt.Sprintf("%s-%s.qxp", a.AppID, parsed.Manifest.Version))
+	if rel, rerr := filepath.Rel(pkgDir, dest); rerr != nil || strings.HasPrefix(rel, "..") {
+		redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "安装包路径非法", "err")
+		return
+	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 		redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "创建目录失败", "err")
 		return
@@ -295,6 +318,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	id := parseID(r, "id")
 	u := s.userOf(r)
 	a, err := s.Store.AppByID(id)
@@ -314,6 +340,9 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteApp(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	id := parseID(r, "id")
 	u := s.userOf(r)
 	a, err := s.Store.AppByID(id)

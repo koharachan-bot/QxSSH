@@ -18,6 +18,11 @@ import (
 
 var appIDRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9\-_]{0,63}$`)
 
+// versionRe 限定版本号字符集。版本号会被拼进落盘文件名
+// （<id>-<version>.qxp），若放任 ".." 与 "/" 会造成目录穿越，
+// 因此这里必须收紧，且在写文件前再校验一次。
+var versionRe = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z._+\-]{0,31}$`)
+
 // 应用包的大小上限与包内文件数上限，与 QxSSH 安装端的限制保持一致。
 const (
 	maxPackageFiles = 500
@@ -134,6 +139,14 @@ func parsePackage(data []byte) (*parsedPackage, error) {
 	}
 	if strings.TrimSpace(m.Name) == "" {
 		return nil, errors.New("manifest.name 不能为空")
+	}
+	// 版本号会拼进文件名，必须限制字符集，否则 "../../x" 可写出包目录之外。
+	m.Version = strings.TrimSpace(m.Version)
+	if m.Version == "" {
+		m.Version = "0.0.0"
+	}
+	if !versionRe.MatchString(m.Version) {
+		return nil, errors.New("manifest.version 非法（只允许字母、数字、. _ + -，最长 32）")
 	}
 	if m.Runtime == "" {
 		entry := strings.TrimSpace(m.Entry)

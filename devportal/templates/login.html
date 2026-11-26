@@ -2,6 +2,7 @@
 <section class="narrow">
   <h2>登录</h2>
   <form method="post" action="/login" class="form">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>邮箱<input type="email" name="email" required autocomplete="username"></label>
     <label>密码<input type="password" name="password" required autocomplete="current-password"></label>
     <div class="ts-slot">{{template "turnstile" .}}</div>

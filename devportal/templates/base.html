@@ -16,7 +16,8 @@
       <a href="/dashboard">我的应用</a>
       {{if .IsAdmin}}<a href="/admin">审核与上架</a>{{end}}
       <a href="/account">账号安全</a>
-      <form method="post" action="/logout" class="inline"><button class="link" type="submit">退出</button></form>
+      <form method="post" action="/logout" class="inline">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="link" type="submit">退出</button></form>
     {{else}}
       <a href="/login">登录</a>
       <a href="/register" class="btn-ghost">注册</a>

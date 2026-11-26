@@ -19,6 +19,7 @@
   <p class="muted">尚未上传安装包。</p>
   {{end}}
   <form method="post" action="/apps/{{.ID}}/upload" enctype="multipart/form-data" class="form">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>选择 .qxp 文件<input type="file" name="package" accept=".qxp" required></label>
     <button class="btn" type="submit">{{if .PackagePath}}重新上传{{else}}上传安装包{{end}}</button>
   </form>
@@ -30,6 +31,7 @@
   <p class="muted">该应用已上架。</p>
   {{else}}
   <form method="post" action="/apps/{{.ID}}/submit">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <button class="btn" type="submit" {{if not .PackagePath}}disabled{{end}}>提交审核</button>
     {{if not .PackagePath}}<span class="muted small">上传安装包后才能提交</span>{{end}}
   </form>
@@ -39,6 +41,7 @@
 <section class="card danger">
   <h3>删除应用</h3>
   <form method="post" action="/apps/{{.ID}}/delete">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <button class="btn-danger" type="submit">删除</button>
   </form>
 </section>

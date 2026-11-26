@@ -73,6 +73,9 @@ func (s *Server) handleTOTPPage(w http.ResponseWriter, r *http.Request) {
 
 // handleTOTPVerify 校验验证码或恢复码，通过后签发正式会话。
 func (s *Server) handleTOTPVerify(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	if ok, wait := s.loginLimiter.allow(clientIP(r)); !ok {
 		redirectWith(w, r, "/login/2fa", fmt.Sprintf("尝试过于频繁，请 %d 秒后再试", int(wait.Seconds())+1), "err")
 		return
@@ -151,6 +154,9 @@ func (s *Server) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 
 // handleTOTPEnable 校验一次验证码后正式启用，并展示恢复码。
 func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	u := s.userOf(r)
 	secret := strings.TrimSpace(r.FormValue("secret"))
 	code := strings.TrimSpace(r.FormValue("code"))
@@ -176,6 +182,9 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 
 // handleTOTPDisable 关闭两步验证，要求当前验证码或密码以确认身份。
 func (s *Server) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	u := s.userOf(r)
 	if !u.TOTPEnabled {
 		redirectWith(w, r, "/account", "两步验证未启用", "err")

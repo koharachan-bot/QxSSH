@@ -16,6 +16,7 @@
     <code class="small mono break">{{.URI}}</code>
   </details>
   <form method="post" action="/account/2fa/enable" class="form mt16">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <input type="hidden" name="secret" value="{{.Secret}}">
     <label>验证码<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="123456" autocomplete="one-time-code" required></label>
     <button class="btn" type="submit">完成绑定</button>

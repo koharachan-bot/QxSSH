@@ -11,6 +11,7 @@
 <section class="card">
   <h3>新建应用</h3>
   <form method="post" action="/apps" class="form grid2">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>应用 id<input name="app_id" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}" placeholder="例如 wechat"></label>
     <label>应用名称<input name="name" required maxlength="60" placeholder="例如 微信"></label>
     <label>简介<input name="summary" maxlength="200" placeholder="一句话说明这个应用"></label>

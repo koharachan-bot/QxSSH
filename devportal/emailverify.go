@@ -137,6 +137,9 @@ func (s *Server) handleVerifyEmailPage(w http.ResponseWriter, r *http.Request) {
 
 // handleVerifyEmailSubmit 校验验证码并激活账号。
 func (s *Server) handleVerifyEmailSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	if ok, wait := s.regLimiter.allow(clientIP(r)); !ok {
 		redirectWith(w, r, "/verify-email", fmt.Sprintf("尝试过于频繁，请 %d 分钟后再试", int(wait.Minutes())+1), "err")
 		return
@@ -157,6 +160,9 @@ func (s *Server) handleVerifyEmailSubmit(w http.ResponseWriter, r *http.Request)
 
 // handleResendCode 重新发送验证码。
 func (s *Server) handleResendCode(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCSRF(w, r) {
+		return
+	}
 	if ok, wait := s.regLimiter.allow(clientIP(r)); !ok {
 		redirectWith(w, r, "/verify-email", fmt.Sprintf("操作过于频繁，请 %d 分钟后再试", int(wait.Minutes())+1), "err")
 		return
