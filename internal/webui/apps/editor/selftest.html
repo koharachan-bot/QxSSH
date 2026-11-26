@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>SELFTEST_PENDING</title></head>
+<body>
+<div id="box"><textarea id="ta" style="width:420px;height:120px"></textarea></div>
+<pre id="out"></pre>
+<script>
+(function () {
+  const box = document.getElementById('box');
+  const ta = document.getElementById('ta');
+  const out = document.getElementById('out');
+  let inputCount = 0;
+  ta.addEventListener('input', function () { inputCount++; });
+  // 关键场景：整块内容 opacity: 0（不可见）时，焦点/输入/事件是否照常工作
+  box.style.opacity = '0';
+  ta.focus();
+  const focused = document.activeElement === ta;
+  ta.value = 'opacity-zero-still-works';
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  const ok = focused && inputCount === 1 && ta.value === 'opacity-zero-still-works';
+  document.title = ok ? 'SELFTEST_PASS' : 'SELFTEST_FAIL';
+  out.textContent = JSON.stringify({
+    focused: focused,
+    inputCount: inputCount,
+    value: ta.value,
+    opacity: getComputedStyle(box).opacity,
+  });
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,7 @@ import { icon } from '/assets/js/icons/index.js';
 import { requestSudoElevation, isSudoPermError } from '/assets/js/core/sys.js';
 import { createAppShell } from '/assets/js/core/app-shell.js';
 import { lang, setupI18n, t, tf } from '/assets/js/core/i18n.js';
-import { CodeEditor, highlightCode, languageForFile, isTextFile } from '/assets/js/core/code-editor.js';
+import { highlightCode, languageForFile, isTextFile } from '/assets/js/core/code-editor.js';
 import {
   sftpList, sftpMkdir, sftpRemove, sftpRename, sftpUpload, sftpDownloadUrl,
   sftpCopy, sftpMove, sftpPreviewUrl, sftpStat, sftpSetAttrs,
@@ -810,7 +810,22 @@ function boot(el, ctx) {
     if (row) row.scrollIntoView({ block: 'nearest' });
   }
 
-  function openItem(pane, f) {
+  // 双击预览的上限：超过后先提醒，避免大文件把预览面板拖死，也避免"双击=下载"的意外。
+  const PREVIEW_LIMITS = {
+    text: 2 * 1024 * 1024,
+    image: 24 * 1024 * 1024,
+    pdf: 32 * 1024 * 1024,
+  };
+
+  /** 判断文件能否在应用内预览：文本 / 图片 / PDF */
+  function previewKindOf(f) {
+    if (kindOf(f) === 'image') return 'image';
+    if (/\.pdf$/i.test(f.name)) return 'pdf';
+    if (isTextFile(f.name)) return 'text';
+    return '';
+  }
+
+  async function openItem(pane, f) {
     if (f.isDir) { navigate(joinPath(pane.path, f.name), { pane }); return; }
     const req = pick.value;
     if (req) {
@@ -822,14 +837,30 @@ function boot(el, ctx) {
       }
       return;
     }
-    const k = kindOf(f);
-    if (k === 'image' || k === 'doc') {
-      selectOnly(pane, f.name);
-      repaint(pane);
-      previewOn.next = true;
+
+    // 能预览就先预览（双击不再直接触发下载）；不能预览时才询问是否下载。
+    const kind = previewKindOf(f);
+    if (!kind) {
+      const ok = await confirmAction(
+        tf('app.files.open-unsupported-title', { v1: f.name }),
+        t('app.files.open-unsupported-body'),
+        { okText: t('app.files.action-download'), danger: false },
+      );
+      if (ok) downloadFile(pane, f);
       return;
     }
-    downloadFile(pane, f);
+    const limit = PREVIEW_LIMITS[kind] || 0;
+    if (limit > 0 && f.size > limit) {
+      const ok = await confirmAction(
+        tf('app.files.open-large-title', { v1: f.name }),
+        tf('app.files.open-large-body', { v1: fmtSize(f.size), v2: fmtSize(limit) }),
+        { okText: t('app.files.action-preview'), danger: false },
+      );
+      if (!ok) return;
+    }
+    selectOnly(pane, f.name);
+    repaint(pane);
+    previewOn.next = true;
   }
 
   function downloadFile(pane, f) {
@@ -1342,65 +1373,8 @@ function boot(el, ctx) {
       toast(tf('app.files.edit-too-large', { v1: fmtSize(EDIT_MAX_BYTES) }), 'warning');
       return;
     }
-    let content;
-    try {
-      const res = await fetch(SF.previewUrl(hostId, full));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      content = await res.text();
-    } catch (e) {
-      toast(tf('app.files.edit-load-failed', { v1: e.message || String(e) }), 'error');
-      return;
-    }
-    const taRef = { current: null };
-    const saving = signal(false);
-    const dlg = { close: () => {} };
-
-    async function save() {
-      if (saving.value) return;
-      const el = taRef.current;
-      if (!el) return;
-      saving.next = true;
-      try {
-        await SF.upload(hostId, pane.path, new File([el.value], f.name, { type: 'text/plain' }));
-        toast(tf('app.files.edit-saved', { v1: f.name }), 'success');
-        dlg.close();
-        reload(pane);
-      } catch (e) {
-        toast(tf('app.files.edit-save-failed', { v1: e.message || String(e) }), 'error');
-      } finally {
-        saving.next = false;
-      }
-    }
-
-    function SaveBtn() {
-      return h('button', {
-        class: 'btn btn-primary btn-sm',
-        text: saving.value ? t('app.files.status-saving') : t('app.files.action-save'),
-        disabled: saving.value,
-        onClick: save,
-      });
-    }
-
-    const d = dialog({
-      title: full,
-      cls: 'fm-edit-dialog',
-      width: '860px',
-      body: [h(CodeEditor, {
-        inputRef: taRef,
-        cls: 'fm-edit-code',
-        lang: languageForFile(f.name),
-        rows: 22,
-        maxRows: 40,
-        value: content,
-        onSubmit: save,
-      })],
-      actions: [
-        h('button', { class: 'btn btn-ghost btn-sm', text: t('app.files.action-cancel'), onClick: () => d.close() }),
-        h(SaveBtn),
-      ],
-    });
-    dlg.close = () => d.close();
-    setTimeout(() => taRef.current?.focus(), 0);
+    // 编辑器是独立插件：交给 editor 应用打开，文件管理器不再用对话框承载。
+    openApp('editor', { file: full });
   }
 
   function StatusBarView() {

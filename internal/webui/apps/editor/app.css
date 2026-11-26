@@ -1,0 +1,89 @@
+/**
+ * app.css —— 文本编辑器插件
+ * 注意：编辑器不靠 opacity 做任何隐藏/禁用，隐藏一律用 display；
+ * 宿主把窗口透明度调成 0 或处于最小化动画时，编辑区仍然可以正常输入。
+ */
+.app-editor { height: 100%; }
+
+.ed-root {
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+  background: var(--card, var(--background)); color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.ed-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  background: var(--muted, var(--card));
+}
+
+.ed-path {
+  min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted-foreground);
+}
+
+.ed-dirty {
+  flex: none; font-size: 0.72rem; color: var(--warning, #d97706);
+  visibility: hidden;
+}
+
+.ed-spacer { flex: 1; }
+
+.ed-btn {
+  flex: none; height: 28px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+  font-size: 0.76rem; font-weight: 600; cursor: pointer;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.ed-btn:hover { background: var(--row-hover); }
+.ed-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ed-primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+.ed-primary:hover { filter: brightness(.94); }
+
+.ed-body {
+  flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative;
+}
+
+.ed-gutter {
+  flex: none; width: 52px; overflow: hidden; border-right: 1px solid var(--border);
+  background: var(--muted, transparent); user-select: none;
+}
+.ed-gutter-inner {
+  padding: 10px 8px 10px 0; text-align: right;
+  font: 13px/1.55 var(--font-mono); color: var(--muted-foreground);
+  white-space: pre; will-change: transform;
+}
+.ed-gutter-inner span { display: block; }
+
+.ed-scroll { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+
+.ed-hl, .ed-input {
+  position: absolute; inset: 0; margin: 0; padding: 10px 12px;
+  font: 13px/1.55 var(--font-mono);
+  border: 0; outline: none; background: transparent;
+  white-space: pre; overflow: auto; tab-size: 4;
+}
+.ed-hl { pointer-events: none; color: var(--foreground); }
+.ed-input {
+  resize: none; color: transparent; caret-color: var(--foreground);
+  -webkit-text-fill-color: transparent;
+}
+.ed-input::selection {
+  background: color-mix(in srgb, var(--primary) 32%, transparent);
+  -webkit-text-fill-color: var(--foreground);
+}
+
+.ed-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 24px; text-align: center;
+}
+.ed-empty-title { font-size: 1rem; font-weight: 600; }
+.ed-empty-desc { max-width: 420px; font-size: 0.82rem; line-height: 1.6; color: var(--muted-foreground); }
+
+.ed-status {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 4px 10px; border-top: 1px solid var(--border);
+  font-size: 0.72rem; color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+.ed-hint { margin-left: auto; }

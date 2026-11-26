@@ -42,6 +42,9 @@ import { hiddenIconIds } from './iconvis.js';
 import { setupI18n, t, tf, lang, onLangChange } from '../core/i18n.js';
 import { watchConnection } from './connwatch.js';
 import { openHostSwitcher, switchDesktopTo } from './host-switch.js';
+import { openHostForm } from '../pages/host-form.js';
+
+const DESK_ICONS_KEY = 'qx-desk-icons-hidden';
 
 const params = new URLSearchParams(location.search);
 const hostId = params.get('host');
@@ -97,6 +100,7 @@ function openApp(app, opts = {}) {
     if (opts.cwd) q.set('cwd', opts.cwd);
     if (opts.initialTab) q.set('tab', opts.initialTab);
     if (opts.qxapi) q.set('qxapi', String(opts.qxapi));
+    if (opts.file) q.set('file', String(opts.file));
     const frameSrc = app.frame ? `${app.frame}${q.toString() ? '?' + q.toString() : ''}` : '';
     const frameOpts = app.frame
       ? { frame: { src: frameSrc, hostId } }
@@ -1400,31 +1404,75 @@ function openSwitchDialog() {
   });
 }
 
+/** 桌面图标是否隐藏（存 localStorage，跨会话保持） */
+function deskIconsHidden() {
+  try {
+    return localStorage.getItem(DESK_ICONS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** 显示 / 隐藏桌面图标 */
+function toggleDeskIcons() {
+  const next = !deskIconsHidden();
+  try {
+    localStorage.setItem(DESK_ICONS_KEY, next ? '1' : '0');
+  } catch { /* 隐私模式忽略 */ }
+  const host = document.getElementById('desk-icons');
+  if (host) host.style.display = next ? 'none' : '';
+  toast(t(next ? 'app.desktop.icons-hidden' : 'app.desktop.icons-shown'), 'success');
+}
+
 function showDeskMenu(e) {
   e.preventDefault();
+  const tidy = (mode) => () => {
+    if (arrangeDesktopIcons(mode)) toast(t('app.desktop.icons-tidied'), 'success');
+  };
   contextMenu([
-    { icon: 'refresh', label: t('app.desktop.action-refresh'), onClick: () => { location.reload(); } },
+    {
+      icon: 'eye',
+      label: t('app.desktop.menu-view'),
+      children: [
+        {
+          icon: deskIconsHidden() ? 'eye' : 'eye-off',
+          label: deskIconsHidden() ? t('app.desktop.icons-show') : t('app.desktop.icons-hide'),
+          onClick: () => toggleDeskIcons(),
+        },
+        { sep: true },
+        { icon: 'arrow-down-a-z', label: t('app.desktop.tidy-by-name'), onClick: tidy('name') },
+        { icon: 'layout-grid', label: t('app.desktop.tidy-compact'), onClick: tidy('compact') },
+      ],
+    },
+    {
+      icon: 'arrow-up-down',
+      label: t('app.desktop.menu-sort'),
+      children: [
+        { icon: 'arrow-down-a-z', label: t('app.desktop.tidy-by-name'), onClick: tidy('name') },
+        { icon: 'layers', label: t('app.desktop.tidy-by-type'), onClick: tidy('type') },
+        { icon: 'layout-grid', label: t('app.desktop.tidy-compact'), onClick: tidy('compact') },
+      ],
+    },
     { sep: true },
+    { icon: 'rotate-cw', label: t('app.desktop.action-refresh'), onClick: () => { location.reload(); } },
     {
-      icon: 'arrow-down-a-z',
-      label: t('app.desktop.tidy-by-name'),
-      onClick: () => {
-        if (arrangeDesktopIcons('name')) toast(t('app.desktop.icons-tidied'), 'success');
-      },
-    },
-    {
-      icon: 'layers',
-      label: t('app.desktop.tidy-by-type'),
-      onClick: () => {
-        if (arrangeDesktopIcons('type')) toast(t('app.desktop.icons-tidied'), 'success');
-      },
-    },
-    {
-      icon: 'layout-grid',
-      label: t('app.desktop.tidy-compact'),
-      onClick: () => {
-        if (arrangeDesktopIcons('compact')) toast(t('app.desktop.icons-tidied'), 'success');
-      },
+      icon: 'folder-plus',
+      label: t('app.desktop.menu-new'),
+      children: [
+        {
+          icon: 'server',
+          label: t('app.desktop.menu-new-host'),
+          onClick: () => {
+            openHostForm({
+              groups: [...new Set((getState().hosts || []).map((x) => x.group).filter(Boolean))],
+              onSaved: () => {
+                loadHosts().catch(() => { });
+                toast(t('app.desktop.host-created'), 'success');
+              },
+            });
+          },
+        },
+      ],
     },
     { sep: true },
     { icon: 'image', label: t('app.desktop.open-wallpaper'), onClick: () => { const a = getApps().find((x) => x.id === 'wallpapercat'); if (a) openApp(a); } },
@@ -1467,6 +1515,7 @@ function retitleWindows() {
 
 async function renderDesk(host) {
   const iconHost = dom('div', { class: 'desk-icons', id: 'desk-icons' });
+  if (deskIconsHidden()) iconHost.style.display = 'none';
   const panelHost = dom('div', { class: 'desk-panel' });
   const deskArea = dom('div', { class: 'desk-area', id: 'desk-area', onContextmenu: showDeskMenu });
   deskArea.append(iconHost, panelHost);

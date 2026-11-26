@@ -1,0 +1,40 @@
+{
+  "id": "editor",
+  "name": "文本编辑器",
+  "nameKey": "app.editor.name",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "远程文本编辑：语法高亮、行号、自动换行与 Ctrl+S 保存回远端主机",
+  "descriptionKey": "app.editor.desc",
+  "author": "QxSSH",
+  "icon": "file-code",
+  "category": "工具",
+  "categoryKey": "core.category-tool",
+  "keywords": [
+    "editor",
+    "text",
+    "code",
+    "bianjiqi"
+  ],
+  "entry": "index.html",
+  "singleton": false,
+  "preferredSize": {
+    "width": 920,
+    "height": 640,
+    "minWidth": 520,
+    "minHeight": 360
+  },
+  "permissions": [
+    "hosts:read",
+    "server:read",
+    "server:stat",
+    "server:upload",
+    "prefs:self:read",
+    "prefs:self:write"
+  ],
+  "systemApp": true,
+  "disableable": true
+}

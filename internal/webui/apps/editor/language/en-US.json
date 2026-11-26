@@ -1,0 +1,21 @@
+{
+  "app.editor.name": "Text editor",
+  "app.editor.desc": "Edit remote text files with syntax highlighting, line numbers, word wrap and Ctrl+S save",
+  "app.editor.empty-title": "Start from a file",
+  "app.editor.empty-desc": "Double-click a text file in the file manager, or use “Preview → Edit”, to open it here in its own window.",
+  "app.editor.loading": "Loading…",
+  "app.editor.load-failed": "Failed to load: {v1}",
+  "app.editor.saved": "Saved {v1}",
+  "app.editor.save-failed": "Save failed: {v1}",
+  "app.editor.save": "Save",
+  "app.editor.saving": "Saving…",
+  "app.editor.reload": "Reload",
+  "app.editor.dirty": "Unsaved",
+  "app.editor.read-only": "Read-only file",
+  "app.editor.line-numbers": "Line numbers",
+  "app.editor.wrap": "Word wrap",
+  "app.editor.cursor": "Ln {v1}, Col {v2}",
+  "app.editor.lines": "{v1} lines",
+  "app.editor.bytes": "{v1}",
+  "app.editor.ctrl-s": "Ctrl+S to save"
+}

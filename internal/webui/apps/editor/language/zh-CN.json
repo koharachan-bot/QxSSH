@@ -1,0 +1,21 @@
+{
+  "app.editor.name": "文本编辑器",
+  "app.editor.desc": "远程文本编辑：语法高亮、行号、自动换行与 Ctrl+S 保存回远端主机",
+  "app.editor.empty-title": "从一个文件开始",
+  "app.editor.empty-desc": "在文件管理器里双击或右键「预览 → 编辑」打开任意文本文件，会在这里以独立窗口编辑。",
+  "app.editor.loading": "正在读取…",
+  "app.editor.load-failed": "读取失败：{v1}",
+  "app.editor.saved": "已保存 {v1}",
+  "app.editor.save-failed": "保存失败：{v1}",
+  "app.editor.save": "保存",
+  "app.editor.saving": "保存中…",
+  "app.editor.reload": "重新加载",
+  "app.editor.dirty": "未保存",
+  "app.editor.read-only": "只读文件",
+  "app.editor.line-numbers": "行号",
+  "app.editor.wrap": "自动换行",
+  "app.editor.cursor": "第 {v1} 行，第 {v2} 列",
+  "app.editor.lines": "{v1} 行",
+  "app.editor.bytes": "{v1}",
+  "app.editor.ctrl-s": "Ctrl+S 保存"
+}
