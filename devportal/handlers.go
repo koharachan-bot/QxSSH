@@ -30,6 +30,9 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHuman(w, r, "/login") {
+		return
+	}
 	ip := clientIP(r)
 	if ok, wait := s.loginLimiter.allow(ip); !ok {
 		redirectWith(w, r, "/login",
@@ -62,6 +65,9 @@ func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHuman(w, r, "/register") {
+		return
+	}
 	if s.Cfg.Registration == "closed" {
 		redirectWith(w, r, "/register", "注册已关闭", "err")
 		return

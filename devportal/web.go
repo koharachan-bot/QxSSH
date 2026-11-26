@@ -27,6 +27,9 @@ type Server struct {
 	// 注册与登录的限速器：两者都是公开端点，不限速会被脚本刷穿。
 	regLimiter   *rateLimiter
 	loginLimiter *rateLimiter
+	// 人机验证：挑战解答的去重表与签发频率限制。
+	challenges *challengeMgr
+	chalLimiter *rateLimiter
 }
 
 // pageData 是所有模板共用的上下文。
@@ -54,6 +57,8 @@ func newServer(cfg *Config, st *Store, cos *COS) (*Server, error) {
 		// 每 IP 每小时最多 5 次注册；每 IP 每 10 分钟最多 10 次登录尝试。
 		regLimiter:   newRateLimiter(5, time.Hour),
 		loginLimiter: newRateLimiter(10, 10*time.Minute),
+		challenges:   newChallengeMgr(),
+		chalLimiter:  newRateLimiter(60, 10*time.Minute),
 	}
 	s.Pub = &Publisher{Store: st, COS: cos, Cfg: cfg}
 	return s, nil
@@ -87,6 +92,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("GET /register", s.handleRegisterPage)
+	mux.HandleFunc("GET /challenge", s.handleChallenge)
+	mux.HandleFunc("POST /challenge/verify", s.handleChallengeVerify)
 	mux.HandleFunc("POST /register", s.handleRegister)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 

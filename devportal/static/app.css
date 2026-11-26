@@ -87,3 +87,10 @@ code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:.88em}
   .table{font-size:12px}
   .ops{flex-direction:column;align-items:stretch}
 }
+
+/* 人机验证状态行 */
+.challenge-row{display:flex;align-items:center;gap:10px;min-height:20px;font-size:12px}
+.challenge-status{color:var(--muted)}
+.challenge-status[data-kind="busy"]{color:var(--brand)}
+.challenge-status[data-kind="ok"]{color:var(--ok)}
+.challenge-status[data-kind="err"]{color:var(--err)}
