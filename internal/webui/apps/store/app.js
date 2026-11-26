@@ -78,8 +78,6 @@ function boot(el) {
   const catalog = signal(null);
   const catalogBusy = signal(false);
   const catalogErr = signal('');
-  // 加载已等待秒数，用于在界面上给出"卡了多久"，避免无限转圈却毫无信息。
-  const catalogElapsed = signal(0);
   const catalogWarn = signal('');
   const marketBusy = signal('');
   const gitDefaultBranch = signal('');
@@ -153,22 +151,19 @@ function boot(el) {
     if (catalog.value && !force) return;
     catalogBusy.next = true;
     catalogErr.next = '';
-    catalogElapsed.next = 0;
-    const timer = setInterval(() => { catalogElapsed.next = catalogElapsed.value + 1; }, 1000);
     try {
       // 宿主侧回源上限 15 秒，这里留一点余量；超时必定落到 catch 并给出结论，
       // 不再出现"一直转圈但什么都不说"的情况。
       const r = await storeCatalog({ timeoutMs: 18000 });
-      catalog.next(r && r.catalog ? r.catalog : null);
-      catalogWarn.next((r && r.warning) || '');
-      if (!catalog.value) catalogErr.next(t('app.store.err-catalog-empty'));
+      catalog.next = r && r.catalog ? r.catalog : null;
+      catalogWarn.next = (r && r.warning) || '';
+      if (!catalog.value) catalogErr.next = t('app.store.err-catalog-empty');
     } catch (e) {
       const msg = (e && e.message) || String(e);
-      catalogErr.next(e && e.timeout
+      catalogErr.next = e && e.timeout
         ? t('app.store.err-catalog-timeout')
-        : msg);
+        : msg;
     } finally {
-      clearInterval(timer);
       catalogBusy.next = false;
     }
   }
@@ -781,7 +776,7 @@ function boot(el) {
     scope.next = id;
     category.next = '';
     if (id === INSTALL.id || id === MARKET.id) query.next = '';
-    if (id === MARKET.id) void loadCatalog();
+    if (id === MARKET.id) scheduleCatalogLoad();
   }
 
   function sideTree() {
@@ -951,12 +946,9 @@ function boot(el) {
 
   function marketBody() {
     if (catalogBusy.value && !catalog.value) {
-      const secs = catalogElapsed.value;
       return h('div', { class: 'am-state' }, [
         h('div', { class: 'am-state-title', text: t('app.store.market-loading') }),
-        h('div', { class: 'am-state-desc', text: secs >= 5
-          ? tf('app.store.market-loading-slow', { v1: secs })
-          : t('app.store.market-loading-hint') }),
+        h('div', { class: 'am-state-desc', text: t('app.store.market-loading-hint') }),
       ]);
     }
     if (catalogErr.value && !catalog.value) {
@@ -1029,10 +1021,25 @@ function boot(el) {
     ]);
   }
 
+  /**
+   * 把「需要拉目录」排到当前渲染批次之后执行。
+   *
+   * 直接在渲染函数里调 loadCatalog 会写 signal，而 signal.js 对「effect 运行中
+   * 写到它依赖的 signal」会直接跳过重跑，结果就是数据取回来了、界面永远停在加载态。
+   * 因此必须用宏任务错开，不能用 queueMicrotask（仍在同一批次）。
+   */
+  function scheduleCatalogLoad() {
+    if (catalogLoading || catalog.value) return;
+    setTimeout(() => {
+      if (catalogLoading || catalog.value) return;
+      void loadCatalog();
+    }, 0);
+  }
+
   function mainTree() {
     if (scope.value === INSTALL.id) return installTree();
     if (scope.value === MARKET.id) {
-      void loadCatalog();
+      scheduleCatalogLoad();
       return marketTree();
     }
     return listTree();
