@@ -7,7 +7,7 @@ import { h, dom, createView, useState } from '../core/vdom.js';
 import { signal } from '../core/signal.js';
 import { appIcon } from '../icons/index.js';
 import { loadHosts, setWorkspace, getState, clearWorkspace } from '../core/store.js';
-import { toast, confirmAction } from '../core/ui.js';
+import { toast } from '../core/ui.js';
 import { dialog } from '../core/components.js';
 import { prefsAll } from '../core/qxssh-api.js';
 import { collectMetrics } from '../core/hostprobe.js';
@@ -36,10 +36,12 @@ import { setHostHooks } from '../core/host-hooks.js';
 import { contextMenu, closeAllMenus } from './ctxmenu.js';
 import { loadUserApps, isUserAppsLoaded } from './appsloader.js';
 import { on as onBus } from '../core/bus.js';
-import { applyWallpaper } from './wallpaper.js';
+import { initWallpaper } from './wallpaper.js';
 import { applyGlass } from './glass.js';
 import { hiddenIconIds } from './iconvis.js';
 import { setupI18n, t, tf, lang, onLangChange } from '../core/i18n.js';
+import { watchConnection } from './connwatch.js';
+import { openHostSwitcher, switchDesktopTo } from './host-switch.js';
 
 const params = new URLSearchParams(location.search);
 const hostId = params.get('host');
@@ -53,6 +55,9 @@ let activeIconLayout = null;
 
 const startOpen = signal(false);
 const folderRev = signal(0);
+
+/** 当前主机的连接监控句柄；切换主机或离开桌面时停止 */
+let connWatch = null;
 
 const iconState = {
   host: null,
@@ -1368,6 +1373,33 @@ function renameFolderDialog(folderId) {
   }, 0);
 }
 
+/** 返回开机页；lostHost 非空时把断线原因带给开机页提示 */
+function leaveForBoot(lostHost = '') {
+  connWatch?.stop();
+  connWatch = null;
+  try { wm.closeAll(); } catch (err) { console.warn('[desktop] 关闭窗口失败', err); }
+  try { clearWorkspace(); } catch (err) { console.warn('[desktop] 退出工作区失败', err); }
+  const u = new URL('/', location.href);
+  if (lostHost) u.searchParams.set('lost', lostHost);
+  location.replace(u.toString());
+}
+
+/** 弹出切换主机对话框：选中后直接进入目标桌面，不必绕回开机页 */
+function openSwitchDialog() {
+  connWatch?.pause();
+  openHostSwitcher({
+    currentId: hostId,
+    onPick: (host) => {
+      connWatch?.stop();
+      connWatch = null;
+      try { wm.closeAll(); } catch (err) { console.warn('[desktop] 关闭窗口失败', err); }
+      try { clearWorkspace(); } catch (err) { console.warn('[desktop] 退出工作区失败', err); }
+      switchDesktopTo(host.id);
+    },
+    onClosed: () => { connWatch?.resume(); },
+  });
+}
+
 function showDeskMenu(e) {
   e.preventDefault();
   contextMenu([
@@ -1395,19 +1427,13 @@ function showDeskMenu(e) {
       },
     },
     { sep: true },
+    { icon: 'image', label: t('app.desktop.open-wallpaper'), onClick: () => { const a = getApps().find((x) => x.id === 'wallpapercat'); if (a) openApp(a); } },
     { icon: 'sun', label: t('app.desktop.open-theme-settings'), onClick: () => openSettingsTab('theme') },
     { sep: true },
     {
       icon: 'user',
       label: t('app.desktop.switch-host'),
-      danger: true,
-      onClick: async () => {
-        const ok = await confirmAction(t('app.desktop.switch-host'), t('app.desktop.switch-hint'), { okText: t('app.desktop.action-switch'), danger: false });
-        if (!ok) return;
-        wm.closeAll();
-        clearWorkspace();
-        location.href = '/';
-      },
+      onClick: () => { openSwitchDialog(); },
     },
   ], { x: e.clientX, y: e.clientY, cls: 'desk-ctx' });
 }
@@ -1453,13 +1479,7 @@ async function renderDesk(host) {
 
   const offLang = onLangChange(() => { retitleWindows(); });
 
-  const doSwitchHost = async () => {
-    const ok = await confirmAction(t('app.desktop.confirm-switch-title'), t('app.desktop.confirm-switch-body'), { okText: t('app.desktop.action-switch'), danger: false });
-    if (!ok) return;
-    wm.closeAll();
-    clearWorkspace();
-    location.href = '/';
-  };
+  const doSwitchHost = () => { openSwitchDialog(); };
 
   const view = createView($('#root'));
   view.update(() => {
@@ -1486,7 +1506,15 @@ async function renderDesk(host) {
 
   requestAnimationFrame(() => { refreshDesktopIcons(); });
 
-  applyWallpaper().catch((err) => console.warn('[desktop] 壁纸应用失败', err));
+  // 连不上当前主机（掉线、sshd 停止、网络中断）时自动退回开机页，把原因带给开机页提示
+  connWatch = watchConnection(hostId, {
+    onLost: () => {
+      console.warn('[desktop] 与主机的连接已断开，自动返回开机页');
+      leaveForBoot(host.name);
+    },
+  });
+
+  initWallpaper().catch((err) => console.warn('[desktop] 壁纸应用失败', err));
   applyGlass();
 
   const themeObserver = new MutationObserver(() => {
@@ -1515,6 +1543,7 @@ async function renderDesk(host) {
   });
 
   window.addEventListener('pagehide', () => {
+    connWatch?.stop();
     offLang();
     themeObserver.disconnect();
     iconView.unmount();
@@ -1525,6 +1554,8 @@ async function renderDesk(host) {
 }
 
 function backToBoot() {
+  connWatch?.stop();
+  connWatch = null;
   try { location.replace('/'); } catch (err) { console.warn('[desktop] 返回开机页失败', err); }
 }
 
