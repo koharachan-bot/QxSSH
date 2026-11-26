@@ -91,7 +91,7 @@ func loadOrCreateSessionKey(dataDir string) (string, error) {
 	return key, nil
 }
 
-// bootstrapAdmin 在数据库为空且配置了管理员口令时创建首个管理员。
+// bootstrapAdmin 在数据库为空且配置了管理员密码时创建首个管理员。
 func bootstrapAdmin(st *Store, cfg *Config) error {
 	n, err := st.CountUsers()
 	if err != nil {

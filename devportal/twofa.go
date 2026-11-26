@@ -174,7 +174,7 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "totp_codes.html", pageData{Title: "保存恢复码", Data: plain})
 }
 
-// handleTOTPDisable 关闭两步验证，要求当前验证码或口令以确认身份。
+// handleTOTPDisable 关闭两步验证，要求当前验证码或密码以确认身份。
 func (s *Server) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
 	u := s.userOf(r)
 	if !u.TOTPEnabled {
@@ -188,7 +188,7 @@ func (s *Server) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
 		ok = checkPassword(u.PassHash, pass)
 	}
 	if !ok {
-		redirectWith(w, r, "/account", "验证码或口令不正确", "err")
+		redirectWith(w, r, "/account", "验证码或密码不正确", "err")
 		return
 	}
 	if err := s.Store.SetTOTP(u.ID, "", false, ""); err != nil {

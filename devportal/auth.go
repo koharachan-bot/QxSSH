@@ -28,7 +28,7 @@ func hashPassword(pw string) (string, error) {
 	return string(b), nil
 }
 
-// checkPassword 校验明文口令。
+// checkPassword 校验明文密码。
 func checkPassword(hash, pw string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
 }

@@ -24,7 +24,7 @@ func (s *Store) CreateUser(email, pw, nickname, role string) (*User, error) {
 		return nil, errors.New("邮箱格式不正确")
 	}
 	if len(pw) < 8 {
-		return nil, errors.New("口令至少 8 位")
+		return nil, errors.New("密码至少 8 位")
 	}
 	hash, err := hashPassword(pw)
 	if err != nil {

@@ -44,7 +44,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	pw := r.FormValue("password")
 	u, err := s.Store.UserByEmail(email)
 	if err != nil || !checkPassword(u.PassHash, pw) {
-		redirectWith(w, r, "/login", "邮箱或口令不正确", "err")
+		redirectWith(w, r, "/login", "邮箱或密码不正确", "err")
 		return
 	}
 	// 登录成功清零，正常用户不会因为之前的失败被锁。
