@@ -4,18 +4,25 @@ QxSSH 插件（应用商店应用）的开发与发布技能，以 [Agent Skill]
 
 ## 安装
 
+不依赖 npm registry，直接从 QxSSH 的 CDN 安装：
+
 ```bash
-npx qxssh-plugin-skill
+# macOS / Linux
+curl -fsSL https://cos.meowhead.cn/skill/install.sh | bash
+```
+
+```powershell
+# Windows
+irm https://cos.meowhead.cn/skill/install.ps1 | iex
+```
+
+指定安装目录：
+
+```bash
+curl -fsSL https://cos.meowhead.cn/skill/install.sh | bash -s -- --dir ~/.codex/skills
 ```
 
 默认装到已存在的 Agent skills 目录（`~/.claude/skills`、`~/.codex/skills` 等）。
-也可以指定：
-
-```bash
-npx qxssh-plugin-skill --dir ~/.claude/skills
-npx qxssh-plugin-skill --print     # 只打印目标路径
-npx qxssh-plugin-skill --force     # 覆盖已安装
-```
 
 装好后对 Agent 说：「用 qxssh-plugin 技能做一个插件并发布」。
 

@@ -11,7 +11,10 @@
 <section class="card">
   <h3>让 Agent 帮你做插件</h3>
   <p class="muted small">装这个技能后，可以对 Claude Code / Codex 说「用 qxssh-plugin 技能做一个插件并发布」，它会按规范写 manifest、打包并调用发布接口。</p>
-  <div class="cmd-box"><code>npx qxssh-plugin-skill</code></div>
+  <p class="muted small">macOS / Linux：</p>
+  <div class="cmd-box"><code>curl -fsSL https://cos.meowhead.cn/skill/install.sh | bash</code></div>
+  <p class="muted small">Windows PowerShell：</p>
+  <div class="cmd-box"><code>irm https://cos.meowhead.cn/skill/install.ps1 | iex</code></div>
   <p class="muted small">发布前在 <a href="/account">账号安全</a> 生成 API Key：</p>
   <div class="cmd-box"><code>export QXSSH_API_KEY=qxk_xxxxxxxx</code></div>
 </section>
