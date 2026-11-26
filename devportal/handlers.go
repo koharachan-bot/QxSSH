@@ -22,6 +22,9 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHuman(w, r, "/login") {
+		return
+	}
 	s.render(w, r, "login.html", pageData{
 		Title: "登录",
 		Flash: r.URL.Query().Get("ok"),
@@ -54,6 +57,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHuman(w, r, "/register") {
+		return
+	}
 	if s.Cfg.Registration == "closed" {
 		s.render(w, r, "error.html", pageData{
 			Title: "注册已关闭",

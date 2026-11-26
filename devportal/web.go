@@ -92,8 +92,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("GET /register", s.handleRegisterPage)
-	mux.HandleFunc("GET /challenge", s.handleChallenge)
-	mux.HandleFunc("POST /challenge/verify", s.handleChallengeVerify)
+	mux.HandleFunc("GET /verify", s.handleVerifyPage)
+	mux.HandleFunc("GET /challenge", s.handleChallengeIssue)
+	mux.HandleFunc("POST /challenge/verify", s.handleChallengeSubmit)
 	mux.HandleFunc("POST /register", s.handleRegister)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 

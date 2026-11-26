@@ -1,0 +1,22 @@
+{{template "header" .}}
+<section class="verify-wrap" data-next="{{.Data}}">
+  <div class="verify-card">
+    <div class="verify-shield" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M24 4l16 6v14c0 10-7 17-16 20-9-3-16-10-16-20V10z"/>
+        <path d="M17 24l5 5 10-10"/>
+      </svg>
+    </div>
+    <h2 class="verify-title">正在验证您是否是真人</h2>
+    <p class="verify-sub">这一步用来阻挡自动化的恶意注册与暴力破解，通常只需一秒。</p>
+    <div class="verify-stage" data-chal-stage>
+      <span class="verify-stage-hint">在此区域内移动鼠标</span>
+    </div>
+    <div class="verify-progress"><i data-chal-progress></i></div>
+    <p class="verify-status" data-chal-status data-kind="busy">正在校验浏览器…</p>
+    <button class="btn-ghost verify-retry" type="button" data-chal-retry hidden>重试验证</button>
+    <p class="verify-foot">验证通过后 15 分钟内无需重复验证。</p>
+  </div>
+</section>
+<script src="/static/challenge.js"></script>
+{{template "footer" .}}

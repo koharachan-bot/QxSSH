@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,109 +13,161 @@ import (
 	"time"
 )
 
-// JS 挑战式人机验证。
+// 人机验证（interstitial 挑战页）。
 //
-// 设计取舍：不引第三方验证码（要外网/要账号），而是让浏览器算一段哈希：
-//   1. 服务端签发带 HMAC 签名的挑战（id + nonce + 难度 + 过期时间），无状态；
-//   2. 浏览器 JS 需要找到 nonce+counter 使 SHA-256 结果有 N 个前导 0，
-//      正常浏览器几百毫秒完成，纯脚本批量刷要付出同样的 CPU 成本；
-//   3. 通过后发一张短期通行 Cookie，注册/登录提交时必须带上。
+// 与上一版的关键差别：挑战变成**服务端有状态、一次性、短时效**，并且要证据链：
 //
-// 它挡不住"愿意付 CPU 的定向攻击"，但配合按 IP 限速足以挡住无差别刷站。
+//	1. PoW：要求浏览器算出一段带前导零的 SHA-256，抬高纯脚本的 CPU 成本；
+//	2. 指针轨迹：采集真实鼠标/触摸移动，要求点数、路径长度与非直线性都达标——
+//	   curl/requests 这类客户端根本没有指针事件，直接出局；
+//	3. 时间下限：人类从看到页面到完成交互不可能快于 1.2 秒，自动脚本往往瞬间完成；
+//	4. 绑定：挑战与签发时的 IP、User-Agent 绑定，换环境作废；
+//	5. 一次性：解答被使用后立即标记，重放无效。
+//
+// 需要说明的边界：这能把「几条 curl 就刷穿」抬到「需要真实浏览器 + 模拟指针轨迹」，
+// 但无法在密码学意义上证明"对面是人"——任何纯客户端验证都有这个上限。
 const (
-	challengeTTL     = 5 * time.Minute
-	challengePassTTL = 15 * time.Minute
-	// 难度 4 表示哈希结果前 4 个十六进制字符为 0，期望约 65536 次尝试。
-	challengeDifficulty = 4
-	challengePassCookie = "qxportal_pass"
+	chalTTL       = 90 * time.Second
+	chalPassTTL   = 15 * time.Minute
+	chalDifficulty = 4
+	chalPassCookie = "qxportal_pass"
+
+	// 证据阈值。
+	chalMinPointerPoints = 10
+	chalMinPathLength    = 220.0 // 归一化坐标系下累计移动距离
+	chalMinDuration      = 1200   // 毫秒
+	// 路径长度 / 首尾直线距离：数学意义上的完美直线比值为 1.000，
+	// 只可能来自程序生成的轨迹；真人鼠标哪怕快速直拖也会因亚像素抖动 >1.01。
+	chalMinCurvature = 1.004
 )
 
-// challengeMgr 保存最近用过的解答，防重放。
+type chalState struct {
+	ID         string
+	Nonce      string
+	Difficulty int
+	IssuedAt   time.Time
+	IP         string
+	UA         string
+	Used       bool
+}
+
+// challengeMgr 保存进行中的挑战与已发放的通行证。
 type challengeMgr struct {
-	mu   sync.Mutex
-	used map[string]time.Time
+	mu    sync.Mutex
+	chals map[string]*chalState
+	pass  map[string]time.Time
 }
 
 func newChallengeMgr() *challengeMgr {
-	return &challengeMgr{used: map[string]time.Time{}}
+	return &challengeMgr{chals: map[string]*chalState{}, pass: map[string]time.Time{}}
 }
 
-// consume 记录一次解答；返回 false 表示该解答已被用过（重放）。
-func (m *challengeMgr) consume(key string) bool {
+// issue 新建一个挑战并记录绑定信息。
+func (m *challengeMgr) issue(ip, ua string) *chalState {
 	now := time.Now()
+	cs := &chalState{
+		ID:         randomToken(10),
+		Nonce:      randomToken(10),
+		Difficulty: chalDifficulty,
+		IssuedAt:   now,
+		IP:         ip,
+		UA:         ua,
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for k, t := range m.used {
-		if now.Sub(t) > challengeTTL*2 {
-			delete(m.used, k)
+	// 顺带清理过期项，避免 map 无限增长。
+	for id, st := range m.chals {
+		if now.Sub(st.IssuedAt) > chalTTL*2 {
+			delete(m.chals, id)
 		}
 	}
-	if _, ok := m.used[key]; ok {
+	for k, t := range m.pass {
+		if now.Sub(t) > chalPassTTL*2 {
+			delete(m.pass, k)
+		}
+	}
+	m.chals[cs.ID] = cs
+	return cs
+}
+
+// get 取挑战（不消费）。
+func (m *challengeMgr) get(id string) (*chalState, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cs, ok := m.chals[id]
+	return cs, ok
+}
+
+// consume 标记挑战已使用；已用过返回 false。
+func (m *challengeMgr) consume(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cs, ok := m.chals[id]
+	if !ok || cs.Used {
 		return false
 	}
-	m.used[key] = now
+	cs.Used = true
 	return true
 }
 
-// signChallenge 给挑战字段做签名，客户端无法伪造难度或延长有效期。
-func signChallenge(key, id, nonce string, difficulty int, expires int64) string {
-	mac := hmac.New(sha256.New, []byte(key))
-	mac.Write([]byte(id + "|" + nonce + "|" + strconv.Itoa(difficulty) + "|" + strconv.FormatInt(expires, 10)))
-	return hex.EncodeToString(mac.Sum(nil))
+// 证据结构。
+type chalEvidence struct {
+	DurationMs int       `json:"durationMs"`
+	Points     [][2]int  `json:"points"`
+	Clicks     [][2]int  `json:"clicks"`
+	KeyEvents  int       `json:"keyEvents"`
+	Signals    map[string]any `json:"signals"`
 }
 
-// issueChallenge 生成一个新挑战。
-func issueChallenge(cfg *Config) map[string]any {
-	id := randomToken(8)
-	nonce := randomToken(8)
-	exp := time.Now().Add(challengeTTL).Unix()
-	return map[string]any{
-		"id":         id,
-		"nonce":      nonce,
-		"difficulty": challengeDifficulty,
-		"expires":    exp,
-		"sig":        signChallenge(cfg.SessionKey, id, nonce, challengeDifficulty, exp),
+// errEvidence 描述证据为何不达标（直接返回给前端，便于用户重试）。
+func checkEvidence(ev chalEvidence) error {
+	if ev.DurationMs < chalMinDuration {
+		return fmt.Errorf("交互过快，请重试")
 	}
-}
-
-// verifyChallenge 校验解答与签名。
-func verifyChallenge(cfg *Config, m *challengeMgr, id, nonce, sig, solution string, difficulty int, expires int64) error {
-	if id == "" || nonce == "" || sig == "" || solution == "" {
-		return fmt.Errorf("挑战参数不完整")
+	if len(ev.Points) < chalMinPointerPoints {
+		return fmt.Errorf("未检测到指针移动，请移动鼠标后重试")
 	}
-	if time.Now().Unix() > expires {
-		return fmt.Errorf("挑战已过期，请刷新页面")
+	// 累计路径长度与非直线性：真实指针轨迹既不是零长度，也不会是一条完美直线。
+	var path float64
+	for i := 1; i < len(ev.Points); i++ {
+		dx := float64(ev.Points[i][0] - ev.Points[i-1][0])
+		dy := float64(ev.Points[i][1] - ev.Points[i-1][1])
+		path += math.Hypot(dx, dy)
 	}
-	if difficulty < 1 || difficulty > 6 {
-		return fmt.Errorf("挑战难度异常")
+	if path < chalMinPathLength {
+		return fmt.Errorf("指针轨迹过短，请正常移动鼠标后重试")
 	}
-	want := signChallenge(cfg.SessionKey, id, nonce, difficulty, expires)
-	if !hmac.Equal([]byte(want), []byte(sig)) {
-		return fmt.Errorf("挑战签名无效")
+	first := ev.Points[0]
+	last := ev.Points[len(ev.Points)-1]
+	straight := math.Hypot(float64(last[0]-first[0]), float64(last[1]-first[1]))
+	if straight < 1 {
+		return fmt.Errorf("指针轨迹异常，请重试")
 	}
-	// 与浏览器端的算法保持完全一致：sha256(nonce + ":" + counter) 的十六进制串
-	// 前 difficulty 位必须是 0。
-	sum := sha256.Sum256([]byte(nonce + ":" + solution))
-	hexstr := hex.EncodeToString(sum[:])
-	if !strings.HasPrefix(hexstr, strings.Repeat("0", difficulty)) {
-		return fmt.Errorf("验证未通过，请重试")
-	}
-	if !m.consume(id + ":" + solution) {
-		return fmt.Errorf("该验证已使用过，请刷新页面")
+	if path/straight < chalMinCurvature {
+		return fmt.Errorf("指针轨迹过于平直，请正常移动鼠标后重试")
 	}
 	return nil
 }
 
-// passToken 生成短期通行凭证，绑定来源 IP。
-func passToken(cfg *Config, ip string) string {
-	exp := time.Now().Add(challengePassTTL).Unix()
+// verifySolution 校验 PoW 解答。
+func verifySolution(nonce, solution string, difficulty int) bool {
+	if difficulty < 1 || difficulty > 6 {
+		return false
+	}
+	sum := sha256.Sum256([]byte(nonce + ":" + solution))
+	return strings.HasPrefix(hex.EncodeToString(sum[:]), strings.Repeat("0", difficulty))
+}
+
+// passToken 生成短期通行凭证，绑定 IP 与 UA。
+func passToken(cfg *Config, ip, ua string) string {
+	exp := time.Now().Add(chalPassTTL).Unix()
 	mac := hmac.New(sha256.New, []byte(cfg.SessionKey))
-	mac.Write([]byte("pass|" + ip + "|" + strconv.FormatInt(exp, 10)))
+	mac.Write([]byte("pass|" + ip + "|" + uaFingerprint(ua) + "|" + strconv.FormatInt(exp, 10)))
 	return strconv.FormatInt(exp, 10) + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
 // validPass 校验通行凭证。
-func validPass(cfg *Config, ip, tok string) bool {
+func validPass(cfg *Config, ip, ua, tok string) bool {
 	if tok == "" {
 		return false
 	}
@@ -127,24 +180,30 @@ func validPass(cfg *Config, ip, tok string) bool {
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(cfg.SessionKey))
-	mac.Write([]byte("pass|" + ip + "|" + parts[0]))
+	mac.Write([]byte("pass|" + ip + "|" + uaFingerprint(ua) + "|" + parts[0]))
 	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(parts[1]))
 }
 
-func setPassCookie(w http.ResponseWriter, r *http.Request, cfg *Config, ip string) {
+// uaFingerprint 取 UA 的哈希前缀，避免把长 UA 拼进签名串。
+func uaFingerprint(ua string) string {
+	sum := sha256.Sum256([]byte(ua))
+	return hex.EncodeToString(sum[:8])
+}
+
+func setPassCookie(w http.ResponseWriter, r *http.Request, cfg *Config, ip, ua string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     challengePassCookie,
-		Value:    passToken(cfg, ip),
+		Name:     chalPassCookie,
+		Value:    passToken(cfg, ip, ua),
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   isHTTPSRequest(r),
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(challengePassTTL.Seconds()),
+		MaxAge:   int(chalPassTTL.Seconds()),
 	})
 }
 
 func readPassCookie(r *http.Request) string {
-	ck, err := r.Cookie(challengePassCookie)
+	ck, err := r.Cookie(chalPassCookie)
 	if err != nil || ck == nil {
 		return ""
 	}
