@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -212,19 +211,4 @@ func extOf(p string) string {
 		return ""
 	}
 	return strings.ToLower(path.Ext(strings.ReplaceAll(p, "\\", "/")))
-}
-
-// typeByExt 在不信任系统 mime 表的前提下给出一个保守的类型判定。
-func typeByExt(p string) string {
-	ext := extOf(p)
-	if ct, ok := inlineSafeExts[ext]; ok {
-		return ct
-	}
-	if ct := mime.TypeByExtension(ext); ct != "" {
-		if isExecutableDocExt(ext) {
-			return "text/plain; charset=utf-8"
-		}
-		return ct
-	}
-	return "application/octet-stream"
 }

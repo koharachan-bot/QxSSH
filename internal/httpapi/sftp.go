@@ -944,14 +944,6 @@ func runSSH(client *ssh.Client, cmd, in string, d time.Duration, strict bool) (s
 
 var errSSHTimeout = errors.New("远端命令超时")
 
-func atoiU32(s string) uint32 {
-	n, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32)
-	if err != nil {
-		return 0
-	}
-	return uint32(n)
-}
-
 var selinuxRe = regexp.MustCompile(`^[A-Za-z_][\w.-]*:[\w.-]+:[\w.-]+(:[\w.,:-]+)?$`)
 
 // fillUnixAttrs 用 SFTP 元数据本地推导扩展属性（QXS-28）。
