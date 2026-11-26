@@ -107,6 +107,12 @@ func New(store *config.Store, log *logging.Logger) *Pool {
 }
 
 func (m *Pool) authMethods(h config.Host) ([]ssh.AuthMethod, error) {
+	// 无密码（none）：显式声明不提供任何凭据，握手只走 SSH 的 none 认证。
+	// 适用于受控网络、容器或回环地址上已配置免密的主机；这里返回空方法集，
+	// 让 x/crypto/ssh 按协议发出 none 请求，把服务端真实的拒绝原因交给用户。
+	if h.AuthType == "none" {
+		return nil, nil
+	}
 	var methods []ssh.AuthMethod
 	if h.Password != "" {
 		methods = append(methods, ssh.Password(h.Password))

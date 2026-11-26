@@ -1,6 +1,7 @@
 {
   "app.hosts.auth.key": "Private key",
   "app.hosts.auth.password": "Password",
+  "app.hosts.auth.none": "No password",
   "app.hosts.sidebar.filterTitle": "Filter by group",
   "app.hosts.sidebar.allHosts": "All hosts",
   "app.hosts.sidebar.groupTitle": "Host groups",

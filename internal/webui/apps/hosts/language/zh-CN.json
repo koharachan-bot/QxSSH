@@ -1,6 +1,7 @@
 {
   "app.hosts.auth.key": "私钥",
   "app.hosts.auth.password": "密码",
+  "app.hosts.auth.none": "无密码",
   "app.hosts.sidebar.filterTitle": "按分组筛选",
   "app.hosts.sidebar.allHosts": "全部主机",
   "app.hosts.sidebar.groupTitle": "主机分组",

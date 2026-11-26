@@ -14,11 +14,30 @@ func (a *Gateway) handleListHosts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, hostsListResp{Hosts: a.store.ListHosts()})
 }
 
+// normalizeAuthType 校验并归一认证方式：password（口令）、key（私钥）、
+// none（无密码，只走 SSH 的 none 认证）。空值表示未指定，保留存储层默认行为。
+func normalizeAuthType(s string) (string, error) {
+	v := strings.ToLower(strings.TrimSpace(s))
+	switch v {
+	case "", "password", "key", "none":
+		return v, nil
+	}
+	return "", fmt.Errorf("authType 取值非法：%q（支持 password / key / none）", s)
+}
+
 func (a *Gateway) handleCreateHost(w http.ResponseWriter, r *http.Request) {
 	var u config.HostUpdate
 	if err := decodeJSON(r, &u); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	if u.AuthType != nil {
+		authType, aerr := normalizeAuthType(*u.AuthType)
+		if aerr != nil {
+			writeErr(w, http.StatusBadRequest, aerr)
+			return
+		}
+		u.AuthType = &authType
 	}
 	h, err := a.store.CreateHost(u)
 	if err != nil {
@@ -40,6 +59,14 @@ func (a *Gateway) handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 	if req.ID == "" {
 		writeErr(w, http.StatusBadRequest, errors.New("id 为必填项"))
 		return
+	}
+	if req.AuthType != nil {
+		authType, nerr := normalizeAuthType(*req.AuthType)
+		if nerr != nil {
+			writeErr(w, http.StatusBadRequest, nerr)
+			return
+		}
+		req.AuthType = &authType
 	}
 	h, err := a.store.UpdateHost(req.ID, req.HostUpdate)
 	if err != nil {

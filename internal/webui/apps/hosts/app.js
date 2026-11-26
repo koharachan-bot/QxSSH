@@ -14,7 +14,9 @@ import { setupI18n, t, tf } from '/assets/js/core/i18n.js';
 import { CodeEditor } from '/assets/js/core/code-editor.js';
 
 function authLabel(type) {
-  return type === 'key' ? t('app.hosts.auth.key') : t('app.hosts.auth.password');
+  if (type === 'key') return t('app.hosts.auth.key');
+  if (type === 'none') return t('app.hosts.auth.none');
+  return t('app.hosts.auth.password');
 }
 
 const mount = document.getElementById('app');

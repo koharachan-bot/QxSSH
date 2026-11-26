@@ -150,6 +150,7 @@ export function openHostForm({ host = null, groups = [], onSaved }) {
 
   function HostFormBody() {
     const key = authType.value === 'key';
+    const none = authType.value === 'none';
     const r = testRes.value;
     return h('form', { class: 'form-section', onSubmit: (e) => e.preventDefault() }, [
       h('div', { class: 'form-section-title', text: t('app.hostform.section-basic') }),
@@ -205,9 +206,13 @@ export function openHostForm({ host = null, groups = [], onSaved }) {
         segmented([
           { value: 'password', label: t('app.hostform.cred-password') },
           { value: 'key', label: t('app.hostform.cred-key') },
+          { value: 'none', label: t('app.hostform.cred-none') },
         ], authType.value, (v) => { authType.next = v; }),
       ]),
-      h('div', { class: `field${key ? ' hidden' : ''}` }, [
+      none ? h('div', { class: 'field' }, [
+        h('span', { class: 'help', text: t('app.hostform.cred-none-help') }),
+      ]) : null,
+      h('div', { class: `field${key || none ? ' hidden' : ''}` }, [
         h('label', { class: 'label', text: t('app.hostform.cred-password') }),
         h(PasswordField, {
           value: '',
