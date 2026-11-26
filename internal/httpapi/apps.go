@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"qxssh/internal/gui"
 	"qxssh/internal/webui"
 )
 
@@ -49,6 +50,40 @@ type appManifest struct {
 	PreferredSize *appPrefSize `json:"preferredSize,omitempty"`
 
 	Apis []appAPIDecl `json:"apis,omitempty"`
+
+	// Runtime 声明应用形态：空表示普通 Web 应用（iframe 加载入口页），
+	// linux-gui 表示 Linux 图形应用（由宿主在目标主机的独立 X 显示上运行）。
+	Runtime string `json:"runtime,omitempty"`
+	// GUI 是 linux-gui 运行时的启动参数；只有声明该运行时才允许出现。
+	GUI *gui.Spec `json:"gui,omitempty"`
+}
+
+// appRuntimeLinuxGUI 是目前唯一的非 Web 运行时：插件只描述「跑什么程序」，
+// 窗口内容、画面编码与输入注入全部由宿主负责，因此插件包可以只有一个清单与图标。
+const appRuntimeLinuxGUI = "linux-gui"
+
+// normalizeAppRuntime 归一并校验运行时声明：runtime 与 gui 必须成对出现，
+// 拒绝「有图形配置却没声明运行时」这种半配置状态，避免前端选错加载方式。
+func normalizeAppRuntime(m *appManifest) error {
+	m.Runtime = strings.ToLower(strings.TrimSpace(m.Runtime))
+	switch m.Runtime {
+	case "":
+		if m.GUI != nil {
+			return errors.New(`manifest.gui 需要同时声明 manifest.runtime 为 "linux-gui"`)
+		}
+	case appRuntimeLinuxGUI:
+		if m.GUI == nil {
+			return errors.New("manifest.runtime 为 linux-gui 时必须提供 manifest.gui 启动参数")
+		}
+		if err := m.GUI.Validate(); err != nil {
+			return err
+		}
+		n := m.GUI.Normalize()
+		m.GUI = &n
+	default:
+		return fmt.Errorf("manifest.runtime 取值非法：%q（目前仅支持 linux-gui）", m.Runtime)
+	}
+	return nil
 }
 
 // appIconSpec 描述应用图标的取值，支持两种清单写法：
@@ -264,6 +299,9 @@ func loadSystemApps() []appManifest {
 			panic(fmt.Sprintf("apps: 内置应用 %s 的 %v", name, err))
 		}
 		m.Apis = apis
+		if err := normalizeAppRuntime(&m); err != nil {
+			panic(fmt.Sprintf("apps: 内置应用 %s 的 %v", name, err))
+		}
 		if appIDRe.MatchString(m.ID) {
 			apps = append(apps, m)
 		}
@@ -385,6 +423,10 @@ func (a *Gateway) handleListUserApps(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if m.SystemApp || m.ID != e.Name() {
+			continue
+		}
+		// 运行时声明非法的应用不列出：它既启动不了，也不该占据桌面图标。
+		if err := normalizeAppRuntime(&m); err != nil {
 			continue
 		}
 
@@ -807,14 +849,21 @@ func (a *Gateway) parseAppZip(r io.ReaderAt, size int64) (appManifest, map[strin
 	if m.Disableable {
 		return appManifest{}, nil, errors.New("manifest.disableable 仅系统内置应用可用，用户应用包不应声明")
 	}
+	if err := normalizeAppRuntime(&m); err != nil {
+		return appManifest{}, nil, err
+	}
 	entryName := strings.ReplaceAll(strings.TrimPrefix(strings.TrimSpace(m.Entry), "./"), "\\", "/")
-	if entryName == "" {
+	// Linux 图形应用由宿主渲染，没有也不需要入口页；其余应用必须有 HTML 入口。
+	if entryName == "" && m.Runtime != appRuntimeLinuxGUI {
 		entryName = "index.html"
 	}
-	if !strings.HasSuffix(entryName, ".html") && !strings.HasSuffix(entryName, ".htm") {
+	if entryName != "" && !strings.HasSuffix(entryName, ".html") && !strings.HasSuffix(entryName, ".htm") {
 		return appManifest{}, nil, errors.New("manifest.entry 必须是应用入口 HTML（默认 index.html）")
 	}
 	if m.ID == "" {
+		if entryName == "" {
+			return appManifest{}, nil, errors.New("manifest.id 不能为空：Linux 图形应用没有入口页可推导 id")
+		}
 		m.ID = "app-" + strings.ToLower(strings.TrimSuffix(filepath.Base(entryName), ".html"))
 	}
 	if !appIDRe.MatchString(m.ID) {
@@ -860,8 +909,10 @@ func (a *Gateway) parseAppZip(r io.ReaderAt, size int64) (appManifest, map[strin
 		return appManifest{}, nil, err
 	}
 	m.Apis = apis
-	if _, ok := byName[entryName]; !ok {
-		return appManifest{}, nil, fmt.Errorf("manifest.entry 指定的文件 %q 不存在于压缩包", m.Entry)
+	if entryName != "" {
+		if _, ok := byName[entryName]; !ok {
+			return appManifest{}, nil, fmt.Errorf("manifest.entry 指定的文件 %q 不存在于压缩包", m.Entry)
+		}
 	}
 	m.Entry = entryName
 

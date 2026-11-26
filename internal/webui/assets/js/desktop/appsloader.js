@@ -7,6 +7,7 @@ import { emit } from '../core/bus.js';
 import { toast } from '../core/ui.js';
 import * as api from '../core/qxssh-api.js';
 import { setupI18n, t, tf } from '../core/i18n.js';
+import { mountGuiApp } from '../gui/viewer.js';
 
 setupI18n().catch(() => { });
 
@@ -43,6 +44,17 @@ export async function loadUserApps() {
   for (const m of list) {
     if (!m.id || m.disabled === true) continue;
     const systemApp = m.systemApp === true;
+    if (m.runtime === 'linux-gui') {
+      // Linux 图形应用没有入口页：窗口内容由宿主渲染，插件只描述「跑什么程序」。
+      registerApp({
+        ...m,
+        source: systemApp ? 'builtin' : 'store',
+        mount(el, opts) {
+          return mountGuiApp(el, m, opts);
+        },
+      });
+      continue;
+    }
     registerApp({
       ...m,
       source: systemApp ? 'builtin' : 'store',

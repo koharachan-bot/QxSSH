@@ -1,0 +1,50 @@
+{
+  "id": "blender53",
+  "name": "Blender 5.3 LTS",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "Blender 5.3 LTS：首次启动自动下载官方运行时；软件渲染下大场景会明显变慢",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "图形应用",
+  "keywords": [
+    "blender",
+    "3d",
+    "modeling",
+    "render"
+  ],
+  "runtime": "linux-gui",
+  "preferredSize": {
+    "width": 1200,
+    "height": 820,
+    "minWidth": 800,
+    "minHeight": 560
+  },
+  "gui": {
+    "command": [
+      "blender"
+    ],
+    "screen": {
+      "width": 1600,
+      "height": 1000,
+      "depth": 24
+    },
+    "dpi": 96,
+    "fps": 30,
+    "bitrateKbps": 5000,
+    "softwareGL": true,
+    "windowManager": "auto",
+    "clipboard": true,
+    "install": {
+      "url": "https://download.blender.org/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz",
+      "sha256": "dacb8264197a3f7fda6001285a5a506fc97ee943881261c2c3bd63c882f22e05",
+      "dest": "blender-5.3.0",
+      "stripComponents": 1,
+      "bin": "blender",
+      "size": 400000000
+    }
+  }
+}

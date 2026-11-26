@@ -1,0 +1,41 @@
+{
+  "id": "qq",
+  "name": "QQ",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "QQ Linux 版：群聊、文件与远程协助都能在插件窗口内完成",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "图形应用",
+  "keywords": [
+    "qq",
+    "tencent",
+    "im"
+  ],
+  "runtime": "linux-gui",
+  "preferredSize": {
+    "width": 980,
+    "height": 760,
+    "minWidth": 640,
+    "minHeight": 480
+  },
+  "gui": {
+    "command": [
+      "qq"
+    ],
+    "screen": {
+      "width": 1200,
+      "height": 820,
+      "depth": 24
+    },
+    "dpi": 96,
+    "fps": 30,
+    "bitrateKbps": 2500,
+    "softwareGL": false,
+    "windowManager": "auto",
+    "clipboard": true
+  }
+}

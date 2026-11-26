@@ -25,6 +25,7 @@ QxSSH is a single-binary, self-hosted web application written in Go. It turns an
 - [Detailed Core Features](#detailed-core-features)
   - [Hosts and Jump Chains](#hosts-and-jump-chains)
   - [Web Terminal and Command Execution](#web-terminal-and-command-execution)
+  - [Terminal UI (TUI)](#terminal-ui-tui)
   - [File Management (SFTP and Host Filesystem)](#file-management-sftp-and-host-filesystem)
   - [Port Forwarding and Intranet Web Proxy](#port-forwarding-and-intranet-web-proxy)
   - [sudo Escalation and Scheduled Jobs](#sudo-escalation-and-scheduled-jobs)
@@ -40,7 +41,7 @@ QxSSH is a single-binary, self-hosted web application written in Go. It turns an
 - [HTTP and WebSocket API Reference](#http-and-websocket-api-reference)
   - [API Design and Request Conventions](#api-design-and-request-conventions)
   - [Full Endpoint Listing](#full-endpoint-listing)
-  - [15 Permission Groups and 88 Fine-Grained Scopes](#15-permission-groups-and-88-fine-grained-scopes)
+  - [16 Permission Groups and 98 Fine-Grained Scopes](#16-permission-groups-and-98-fine-grained-scopes)
 - [Data and Configuration Directory](#data-and-configuration-directory)
 - [Development and Building](#development-and-building)
 - [Git Exclusions and Build Artifacts](#git-exclusions-and-build-artifacts)
@@ -63,6 +64,7 @@ QxSSH is a single-binary, self-hosted web application written in Go. It turns an
 - **sudo Session Escalation**: Request administrator elevation per host; passwords reside only in memory (default 30-minute expiration) with manual instant wipe support.
 - **Scheduled Jobs (Cron)**: Built-in 5-field cron engine executing automated tasks on designated remote hosts.
 - **Deep Audit Logging**: Comprehensive tracking of every API call including caller app ID, target host, endpoint, duration, and status. In verbose mode, request headers and bodies are encrypted with AES-256-GCM at rest, with workspace-based log rotation, sanitized zip archiving, and retention-based pruning.
+- **Pluggable Interface Backends**: web (browser console), tui (terminal UI), and gui (Windows WebView2 window) share one core; `-web` / `-tui` / `-gui` combine freely, and `gui` starts by default when none is given (it opens a desktop window on Windows). The terminal UI listens on no port and reuses the pool and config store directly.
 - **Micro-Kernel Plugin Ecosystem**: 11 built-in core system apps, support for installing third-party apps from `.qxp` packages, download links, or Git repositories, live dev-mode symlinking, and a strict zero-default fine-grained permission model.
 - **Private Storage and Secrets**: Each app is provisioned with an isolated storage space and an AES-256-GCM encrypted secret key-value store.
 - **Native Internationalization**: Full bilingual English and Simplified Chinese dictionaries with host/app separation and server-side `Accept-Language` negotiation.
@@ -75,6 +77,7 @@ QxSSH is a single-binary, self-hosted web application written in Go. It turns an
 
 - **Go 1.27+**
 - Pure Go implementation: no CGO, no Node.js build tools required.
+- **The gui plugin is Windows-only** and requires the Microsoft Edge WebView2 Runtime (normally preinstalled with Edge on Windows 10/11). `WebView2Loader.dll` is embedded into the executable, so nothing extra ships alongside it.
 
 ### Build and Run
 
@@ -82,22 +85,38 @@ QxSSH is a single-binary, self-hosted web application written in Go. It turns an
 # 1. Build the executable binary
 go build -o qxssh .
 
-# 2. Run locally (default listen address: 127.0.0.1:8800)
+# 2. Run locally (no UI flag: opens the WebView2 desktop window on Windows)
 ./qxssh
 
 # 3. Launch and automatically open the default web browser
 ./qxssh -open
 
-# 4. Expose to external/LAN networks (authentication token is mandatory)
+# 4. Terminal UI only (no listening port; manage hosts right in your terminal)
+./qxssh -tui
+
+# 5. Browser console and terminal UI together (freely combined in one process)
+./qxssh -web -tui
+
+# 6. Expose to external/LAN networks (authentication token is mandatory)
 ./qxssh -addr 0.0.0.0:8800 -auth-token "your-secure-token"
 ```
 
-On Windows PowerShell, the compiled artifact is `qxssh.exe`:
+The three interfaces are pluggable plugins over one core: `web` (browser console listening on `-addr`), `gui` (a Windows WebView2 window that binds a random loopback port internally and loads the same frontend), and `tui` (terminal UI, bypassing HTTP). `-web`, `-tui`, and `-gui` can be combined freely; with none of them the `gui` plugin starts by default. The gui's WebView2Loader.dll is embedded into the executable, so the release is still a single exe and only needs the system WebView2 Runtime (normally preinstalled with Edge on Windows 10/11). `-web` and `-gui` can run together: web owns `-addr`, gui uses its own internal random loopback port, which is released as soon as the window closes.
+
+Built against the `windowsgui` subsystem, double-clicking the exe (default gui) creates **no console window at all**. `-web` reattaches to the launching terminal and prints the URL, while `-tui` uses its own newly allocated console (avoiding input races with the parent shell). When startup fails without a usable console, a native error dialog appears instead of a silent exit.
+
+On Windows PowerShell, the compiled artifact is `qxssh.exe`. **Link against the GUI subsystem**, otherwise the gui window comes with an extra console window:
 
 ```powershell
-go build -o qxssh.exe .
-.\qxssh.exe -open
+# Recommended: GUI subsystem, so double-clicking gui shows no console at all
+go build -ldflags "-H windowsgui" -o qxssh.exe .
+.\qxssh.exe
+
+# Or use the bundled build script
+.\build-windows.ps1
 ```
+
+With a `windowsgui` build: the default gui has no console when double-clicked; `-web` reattaches to the terminal that launched it and prints the URL (when double-clicked with no terminal, it opens no black window and the URL goes to the file configured by `-log-file`); `-tui` reuses the launching terminal, or allocates a console window when double-clicked. If startup fails without a console, a native error dialog appears instead of a silent exit.
 
 ### First Login
 
@@ -109,9 +128,13 @@ go build -o qxssh.exe .
 
 | CLI Flag | Environment Variable | Default | Description |
 | --- | --- | --- | --- |
-| `-addr` | `QXSSH_ADDR` | `127.0.0.1:8800` | HTTP service listen address |
+| `-addr` | `QXSSH_ADDR` | `127.0.0.1:8800` | HTTP listen address of the -web plugin (gui picks a kernel-assigned random port on `127.0.0.1` instead) |
 | `-conf` | `QXSSH_CONF` | `qxssh` under user config directory | Root directory for configuration and data storage |
-| `-open` | `QXSSH_OPEN` | `false` | Automatically launch the default browser on startup |
+| `-web` | `QXSSH_WEB` | `false` | Enable the browser console plugin |
+| `-tui` | `QXSSH_TUI` | `false` | Enable the terminal UI plugin |
+| `-gui` | `QXSSH_GUI` | `false` | Enable the Windows WebView2 desktop window plugin |
+| `-open` | `QXSSH_OPEN` | `false` | Automatically launch the default browser on startup (web only) |
+| `-tls-cert` / `-tls-key` | `QXSSH_TLS_CERT` / `QXSSH_TLS_KEY` | Empty | PEM certificate and key; providing both serves HTTPS |
 | `-log-level` | `QXSSH_LOG_LEVEL` | `info` | Logging filter level: `debug` / `info` / `warn` / `error` / `silent` |
 | `-log-file` | `QXSSH_LOG_FILE` | Empty (console stdout only) | Log file path; set to `auto` to write to `<config-dir>/logs/qxssh.log` |
 | `-auth-token` | `QXSSH_AUTH_TOKEN` | Empty (loopback only) | Global authentication token for remote access; mandatory for non-loopback addresses |
@@ -144,7 +167,7 @@ Because QxSSH is capable of executing arbitrary commands, managing files, and op
 3. **Two-Tier Session Isolation (Host vs. App)**:
    Host pages (`index.html` and `desktop.html`) are injected with a one-time random Host Token generated via `crypto/rand` during server-side template rendering. Third-party apps run inside sandboxed `iframe`s and cannot access the host token. Apps must request a distinct Access Token minted by the host via `POST /api/v1/session/mint`, signed with specific, restricted scopes.
 4. **Zero-Default Permission Principle**:
-   The system defines 15 functional groups with 88 fine-grained scopes. By default, all scopes are set to `false` (no permission granted by default). Third-party apps must explicitly request permissions in `manifest.json` and obtain user consent upon installation or at runtime before accessing private storage, secrets, or system APIs. The host and built-in system apps hold full permissions.
+   The system defines 16 functional groups with 98 fine-grained scopes. By default, all scopes are set to `false` (no permission granted by default). Third-party apps must explicitly request permissions in `manifest.json` and obtain user consent upon installation or at runtime before accessing private storage, secrets, or system APIs. The host and built-in system apps hold full permissions.
 5. **Static Credential Encryption (AES-256-GCM)**:
    All remote passwords, private keys, key passphrases, and app secrets are stored in SQLite encrypted using AES-256-GCM. The primary master key is generated via cryptographically secure randomness on the first boot and persisted into the database `meta` table.
 6. **Trust On First Use (TOFU) Host Key Verification**:
@@ -162,9 +185,11 @@ Because QxSSH is capable of executing arbitrary commands, managing files, and op
 
 ```
 QxSSH/
-├── main.go                     # Entry point: flag parsing, preflight security checks, logging, graceful shutdown
+├── main.go                     # Entry point: flag parsing, UI plugin selection, core assembly, graceful shutdown
 ├── internal/
-│   ├── bootstrap/              # Runtime assembly: wires pool, tunnels, web proxies, HTTP gateway, and hooks
+│   ├── console/                # UI plugin layer: web / gui (Windows WebView2) / tui registration, selection, lifecycle
+│   ├── tui/                    # Terminal UI: ANSI rendering, raw terminal mode, host panel, SSH interactive sessions
+│   ├── bootstrap/              # Core assembly: wires pool, tunnels, web proxies, API gateway (no listener) and hooks
 │   ├── config/                 # Storage layer: pure-Go SQLite, AES-256-GCM crypto, ssh_config parser
 │   ├── sshpool/                # SSH pool: jump-chain traversal, keepalive, host key verification, OS probing
 │   ├── tunnel/                 # Tunnel registry: local forwarding, remote forwarding, dynamic SOCKS5
@@ -180,17 +205,22 @@ QxSSH/
 ### Core Component Topology
 
 ```
-                  ┌────────────────────────────────────────────────────────┐
-User Browser ────▶│  httpapi.Gateway (Routing / Permissions / Sessions / Audit)│
- (HTTP / WS)      └──────────┬──────────────┬──────────────┬───────────────┘
-                             │              │              │
-                      config.Store    sshpool.Pool   tunnel / proxy
-                     (SQLite+Crypto)   (SSH Pool)    (Tunnels & Web Proxy)
+Browser (HTTP/WS) ──▶ ┌──────────────── console plugins ─────────────────────┐
+                      │ web  ──▶ httpapi.Gateway ──┐                        │
+Local terminal (ANSI)─▶│ tui  ─────────────────────┼──┐                     │
+                      │ gui  = WebView2 window ────┼──┤                     │
+                      └────────────────────────────┼──┼─────────────────────┘
+                                                   │  │
+                            ┌──────────────────────▼──▼─────────────────────┐
+                            │ bootstrap.Core: config.Store / sshpool.Pool   │
+                            │                 tunnel / proxy registries     │
+                            └───────────────────────────────────────────────┘
 ```
 
-- **`bootstrap`**: Assembles all underlying systems and registers event hooks (e.g. cascading teardown of port forwards and web proxies when a host connection drops).
+- **`console`**: UI plugin registry started from combined `-web` / `-tui` / `-gui` flags; the first interface to exit cancels the rest. web and gui share one HTTP host, with gui handing the same frontend to WebView2 on an internal loopback port.
+- **`bootstrap`**: Assembles all underlying systems and registers event hooks (e.g. cascading teardown of port forwards and web proxies when a host connection drops). It holds no listener: serving HTTP is the job of the web / gui plugin.
 - **`sshpool`**: The singular gateway for all remote SSH capabilities, managing jump chains, connection reuse, and invalidation.
-- **`httpapi`**: Table-driven API gateway where each endpoint declares its HTTP verb, path, and required permission scope. All declarations are validated at startup.
+- **`httpapi`**: Table-driven API gateway where each endpoint declares its HTTP verb, path, and required permission scope. All declarations are validated at startup. Used by the web / gui plugin; the TUI calls the core layer directly.
 
 ---
 
@@ -198,7 +228,7 @@ User Browser ────▶│  httpapi.Gateway (Routing / Permissions / Sessio
 
 ### Hosts and Jump Chains
 
-- Host parameters include name, group, address/hostname, SSH port, user, authentication type (password or private key), password text, private key content or path, passphrase, notes, and an associated jump host.
+- Host parameters include name, group, address/hostname, SSH port, user, authentication type (password, private key, or no password), password text, private key content or path, passphrase, notes, and an associated jump host. The "no password" type sends no credentials and relies on the SSH none method, which suits trusted networks, containers, or loopback hosts already configured for passwordless access.
 - Jump chains support up to 5 levels (`MaxJumpDepth = 5`); cyclic dependencies and excessive depth are detected and blocked on create/update.
 - Deletion of any host acting as an active jump host for others is refused, displaying all dependent child hosts.
 - Bulk import parses standard OpenSSH `~/.ssh/config` files, extracting `Host`, `HostName`, `User`, `Port`, `IdentityFile`, and `ProxyJump`.
@@ -209,6 +239,16 @@ User Browser ────▶│  httpapi.Gateway (Routing / Permissions / Sessio
 - The terminal connects to the backend over WebSocket at `/api/v1/ws/term/session`, supporting PTY window resizing (cols and rows) and full terminal emulation.
 - Command execution distinguishes between **remote host execution** (`exec:run`) and **local host execution** (`local:exec`). If the `host` parameter is left empty, the command runs locally on the machine hosting QxSSH.
 - Detached Background Jobs: Jobs record their process PID, start time, and output files under `~/.qxssh/jobs/<job-id>` on the remote target host. Status and logs are queried via file protocols without maintaining a persistent connection, so jobs continue running even if the browser or network disconnects.
+
+### Terminal UI (TUI)
+
+`qxssh -tui` manages hosts right in your terminal, with no listening port and no browser:
+
+- **Host list**: ↑ / ↓ (or k / j) to move, Enter to connect, r to reload, `/` to filter (space-separated terms with AND semantics; Enter confirms, Esc cancels), q to quit.
+- **Session page**: forwards the remote PTY shell full-screen and syncs window resizes; press `Ctrl+]` to disconnect and return to the list. A remote shell that exits on its own reports its exit status.
+- **Logging**: while the TUI owns the terminal, console logging is muted automatically (a file configured with `-log-file` keeps receiving entries) so log lines cannot break the full-screen rendering.
+- **Fallback**: when stdin / stdout are not TTYs (redirection, CI), it returns a clear error immediately and never blocks.
+- Combined with `-web`, both interfaces run in one process; quitting the TUI ends the process (and the browser console with it).
 
 ### File Management (SFTP and Host Filesystem)
 
@@ -242,7 +282,7 @@ User Browser ────▶│  httpapi.Gateway (Routing / Permissions / Sessio
 
 ## Built-in App Ecosystem
 
-QxSSH utilizes a modular micro-frontend architecture. All 11 built-in applications are implemented using the same public SDK and `manifest.json` specification as third-party extensions:
+QxSSH utilizes a modular micro-frontend architecture. All built-in applications are implemented using the same public SDK and `manifest.json` specification as third-party extensions:
 
 | App Name | App ID | Category | Description |
 | --- | --- | --- | --- |
@@ -254,17 +294,27 @@ QxSSH utilizes a modular micro-frontend architecture. All 11 built-in applicatio
 | **Batch** | `batch` | Tools | Run shell commands in parallel across multiple hosts with aggregated output |
 | **Task Monitor** | `taskmon` | System | Real-time CPU/memory load graphs, process trees, and elevated process termination |
 | **Audit Log** | `logs` | System | Live audit log viewer, permission grant tracking, and archive downloads |
-| **Settings** | `settings` | System | Desktop themes, Hero Patterns wallpaper textures, taskbar layout, and preferences |
+| **Settings** | `settings` | System | Desktop themes, taskbar layout, and preferences; the wallpaper entry points to Wallpaper Cat |
+| **Wallpaper Cat** | `wallpapercat` | System | The single place for wallpapers: images / videos / interactive packs / built-in engines / textures with upload, delete, rotation, sound, pointer interaction, and fit options |
 | **App Manager** | `store` | System | Browse installed apps, install from Git repositories / download links / local `.qxp` packages, enable/disable, and uninstall |
 | **Systemd Manager** | `systemd` | System | Inspect and control Linux services, sockets, and timers (requires a systemd host) |
+| **Docker Manager** | `docker` | System | Containers, images, networks, volumes and Compose with live colored logs, interactive container shell, image builds, one-click China registry-mirror setup, and simple (cards + one-click actions) / pro (full tables + console) modes |
+| **Kubernetes Manager** | `k8s` | System | Clusters, workloads, pods, services, nodes and events with colored pod logs, YAML editing and dry-run, kubectl console, and simple / pro modes |
 
-Docker Manager is no longer bundled with the main binary. Official app repository:
+> **Wallpaper system**: the desktop accepts six forms — image, video, interactive pack, built-in engine, solid colour and texture — remembered separately per target (desktop / boot screen) and theme tier (light / dark).
+>
+> - **Video wallpapers**: `mp4` / `webm` / `ogv` / `mov` containers with optional sound (autoplay policy requires a gesture, so the desktop unmutes after the first click), volume, playback rate, looping and `pause when hidden`.
+> - **Interactive wallpapers**: import a zip containing `index.html`, or a `wallpaper.json` declaring entry / title / audio. The pack runs inside an iframe sandbox without `allow-same-origin` and cannot read the host session token; the host broadcasts `{__qxWall:1, type:pointer, x, y, down}` through `postMessage`, and an optional capture mode takes the pointer for true interactivity (Esc or 4 seconds exits).
+> - **Built-in engines**: four canvas animations drawn by `assets/js/desktop/wallpaper-engine.js` (cat stardust, aurora, rain window, star orbits) that follow the pointer and theme, using no disk and no network.
+> - **Rotation**: switch the desktop wallpaper on an interval, optionally shuffled and limited to a chosen set.
+
+Docker and Kubernetes managers are bundled with the main binary and work out of the box. The official app repository still hosts their latest versions and other official apps:
 
 ```
 https://github.com/QingXuan2000/QxSSH-AppStore.git
 ```
 
-Each app in that repository lives in its own `apps/<app-id>` subdirectory; Docker Manager is at `apps/docker`. In App Manager → **Install from Git repository**, enter the repository URL above and set the subdirectory to `apps/docker` to clone and install directly. You can also use "Link directory" for development, or upload a packaged `.qxp`. The URL is always shown in the install panel with one-click copy / fill.
+Each app in that repository lives in its own `apps/<app-id>` subdirectory; for example Docker Manager is at `apps/docker`. To override a bundled version with the repository one, open App Manager → **Install from Git repository**, enter the repository URL above and set the subdirectory to `apps/docker` (or `apps/k8s`). You can also use "Link directory" for development, or upload a packaged `.qxp`. The URL is always shown in the install panel with one-click copy / fill.
 
 Git-repo installs run on the built-in pure-Go Git engine (`go-git`); **no system `git` CLI is required on the host running QxSSH**.
 
@@ -417,6 +467,79 @@ zip -r ../my-app.qxp . -x "*.git*"
 
 Install the package via the desktop **App Manager** by clicking **Install App** and selecting the `.qxp` file. All permissions declared in `manifest.permissions` are granted upon installation.
 
+### Linux GUI App Plugins (runtime=linux-gui)
+
+A regular plugin points `entry` at an `index.html` and runs a web app inside the window. A **Linux GUI app plugin**
+declares `runtime: "linux-gui"` instead: QxSSH starts a dedicated virtual X display (Xvfb) on a managed Linux host,
+runs the native program there (WeChat, QQ, WPS, Blender, …), encodes the screen with H.264 (decoded through WebCodecs,
+JPEG as fallback) into the browser window, and sends keyboard, mouse and clipboard events back to the host.
+Compared to VNC the session is persistent, survives reconnects, and decouples window scaling from resolution.
+
+The plugin package stays tiny: a `manifest.json` and an icon, while the real program lives on the target host.
+
+```json
+{
+  "id": "wechat",
+  "name": "WeChat",
+  "runtime": "linux-gui",
+  "icon": "icon.svg",
+  "category": "Graphical apps",
+  "preferredSize": { "width": 980, "height": 760 },
+  "gui": {
+    "command": ["wechat"],
+    "screen": { "width": 1200, "height": 820, "depth": 24 },
+    "fps": 30,
+    "bitrateKbps": 2500,
+    "softwareGL": false,
+    "windowManager": "auto",
+    "clipboard": true
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `command` | Required, argv array (never spliced through a shell, so it cannot be injected) |
+| `args` / `env` | Optional extra arguments and environment variables |
+| `screen` | Virtual canvas size and depth (default 1280×800×24, 320–3840 per side, depth 16 or 24) |
+| `dpi` | Display DPI (default 96) |
+| `fps` / `bitrateKbps` | Frame rate and bitrate (default 30 / 2500) |
+| `softwareGL` | Force Mesa software rendering when there is no GPU (recommended for Blender) |
+| `windowManager` | `auto`, `none`, `openbox`, or `fluxbox` |
+| `clipboard` | Whether to sync the clipboard |
+| `install` | On-demand runtime for heavyweight programs (see below) |
+
+**Target host requirements**: `Xvfb`, `ffmpeg`, `python3` (input injection), optionally `xclip` (clipboard) and `openbox`.
+A missing dependency fails the launch with the exact `apt-get` / `dnf` / `pacman` command to run first.
+
+**On-demand runtimes**: a several-hundred-MB runtime such as Blender does not belong in a `.qxp`, so declare the
+official archive under `gui.install`:
+
+```json
+"install": {
+  "url": "https://download.blender.org/release/Blender4.5/blender-4.5.13-linux-x64.tar.xz",
+  "sha256": "da4e69b0…",
+  "dest": "blender-4.5.13",
+  "stripComponents": 1,
+  "bin": "blender"
+}
+```
+
+It is downloaded to `~/.local/share/qxssh/runtimes/<app id>/`, verified against SHA-256, unpacked once and reused afterwards.
+
+**Packaging** with the bundled tool:
+
+```bash
+go run ./tools/packgui -dir examples/gui-apps/wechat -out dist/wechat.qxp
+go run ./tools/packgui -desktop /usr/share/applications/wechat.desktop -id wechat -out dist/wechat.qxp
+```
+
+`examples/gui-apps/` ships ready-to-pack templates for WeChat, QQ, WPS and Blender 3.6 LTS / 4.5 LTS / 5.3 LTS.
+**Blender has no 4.6 release**; the maintained 4.x branch is 4.5 LTS (see the README in that directory).
+
+> Limits: keys map by physical position to X11 keysyms, so paste non-ASCII text through the clipboard; the canvas
+> scales uniformly, and changing the session resolution requires restarting the session.
+
 ### Sample App Template
 
 A complete reference implementation is available in [`examples/Examples/`](examples/Examples/) (see its [README.en.md](examples/Examples/README.en.md)). It covers 100% of SDK functions and UI components, including live API coverage tests.
@@ -517,6 +640,16 @@ The official app repository is [`QxSSH-AppStore`](https://github.com/QingXuan200
 | `POST` | `/api/v1/files/upload` | `server:upload` | Stream upload a file to the remote host |
 | `POST` | `/api/v1/files/attrs` | `server:attrs` | Update POSIX file permissions and ownership |
 
+#### 5.1 Linux GUI Apps (runtime=linux-gui)
+
+| Method | Endpoint | Permission | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/gui/start` | `gui:launch` | Create a dedicated X display on the target host and start the GUI app declared by the plugin |
+| `POST` | `/api/v1/gui/stop` | `gui:launch` | End the session and clean up processes and the session directory |
+| `GET` | `/api/v1/gui/list` | `gui:launch` | List running GUI sessions (used to restore a reopened window) |
+| `GET` | `/api/v1/gui/deps` | `gui:launch` | Probe missing Xvfb / ffmpeg / python3 and return install hints |
+| `GET` (WS) | `/api/v1/ws/gui/session` | `gui:launch` | Screen (H.264 / JPEG binary frames) and input (JSON commands) channel |
+
 #### 6. Elevation, Tunnels, and Network Proxy
 
 | Method | Endpoint | Required Permission | Description |
@@ -542,7 +675,7 @@ The official app repository is [`QxSSH-AppStore`](https://github.com/QingXuan200
 | `POST` | `/api/v1/apps/link` | `apps:link` | Link a local development directory as an active app |
 | `POST` | `/api/v1/apps/enabled` | `apps:toggle` | Enable or disable an installed app |
 | `GET` | `/api/v1/apps/file/{id}/{path...}` | Public | Serve static assets from an installed app package |
-| `GET` | `/api/v1/perm/catalog` | Public | Retrieve the catalog of all 88 permission scopes |
+| `GET` | `/api/v1/perm/catalog` | Public | Retrieve the catalog of all 97 permission scopes |
 | `GET` | `/api/v1/perm/granted` | `perm:granted` | Check granted permissions for the calling app |
 | `GET` | `/api/v1/perm/grants` | `perm:read` | Inspect permission allocations for all apps |
 | `POST` | `/api/v1/perm/grant` | `perm:grant` | Grant specific scopes to an application |
@@ -575,6 +708,18 @@ The official app repository is [`QxSSH-AppStore`](https://github.com/QingXuan200
 | `POST` | `/api/v1/localfs/rename` | `local:rename` | Rename files or directories on the QxSSH host |
 | `POST` | `/api/v1/localfs/delete` | `local:delete` | Permanently delete files or directories on the QxSSH host |
 
+#### 9.1 Wallpaper Library (images / videos / interactive packs)
+
+| Method | Endpoint | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/wallpapers/list` | `wallpaper:read` | List library entries and hand out the file capability token plus upload limits |
+| `POST` | `/api/v1/wallpapers/upload?name=<file>` | `wallpaper:write` | Upload an image or video wallpaper as raw bytes (type decided by extension) |
+| `POST` | `/api/v1/wallpapers/import?name=<pack>` | `wallpaper:write` | Import an interactive wallpaper zip (atomically unpacked into its own subdirectory) |
+| `POST` | `/api/v1/wallpapers/delete` | `wallpaper:write` | Delete a file or an interactive pack directory from the library |
+| `GET` | `/api/v1/wallpapers/file/<token>/<name>[/<path>]` | capability token | Serve wallpaper files with Range support (video seeking); pack HTML gets a sandboxed CSP |
+
+The library lives in `<config dir>/wallpapers/`: image and video files sit at the root, while an interactive pack is a subdirectory with `index.html` (or a `wallpaper.json` declaring its entry). It is deliberately not exposed through `localfs/*` — the host filesystem API rejects the whole config directory — and file reads authenticate with a capability token instead of a session token, so `<video>` and `<iframe>` can reference the URL directly.
+
 #### 10. Preferences and Audit Logging
 
 | Method | Endpoint | Required Permission | Description |
@@ -593,15 +738,16 @@ The official app repository is [`QxSSH-AppStore`](https://github.com/QingXuan200
 
 ---
 
-### 15 Permission Groups and 88 Fine-Grained Scopes
+### 16 Permission Groups and 98 Fine-Grained Scopes
 
-Permissions are partitioned into 15 categories according to the principle of least privilege, with hazard rankings (1 = low, 2 = medium, 3 = high):
+Permissions are partitioned into 16 categories according to the principle of least privilege, with hazard rankings (1 = low, 2 = medium, 3 = high):
 
 1. **`read` (Read-only System)**: `local:hostinfo`, `perm:granted`
 2. **`prefs` (Preferences)**: `prefs:read`, `prefs:write`, `prefs:self:read`, `prefs:self:write`
 3. **`storage` (App Storage)**: `storage:list`, `storage:read`, `storage:write`, `storage:delete`, `storage:mkdir`, `storage:rename`
 4. **`secret` (App Secrets)**: `secret:read`, `secret:write`, `secret:delete`, `secret:list`
 5. **`exec` (Execution)**: `exec:run`, `exec:stream`, `exec:session`, `term:open`
+5.1 **`gui` (Graphical Apps)**: `gui:launch`
 6. **`job` (Background Jobs)**: `job:run`, `job:status`, `job:output`, `job:kill`, `job:list`, `job:delete`
 7. **`schedule` (Scheduling)**: `schedule:list`, `schedule:create`, `schedule:update`, `schedule:delete`, `schedule:run`
 8. **`files` (Remote SFTP)**: `server:stat`, `server:read`, `server:download`, `server:upload`, `server:mkdir`, `server:rename`, `server:copy`, `server:move`, `server:delete`, `server:attrs`
@@ -611,7 +757,9 @@ Permissions are partitioned into 15 categories according to the principle of lea
 12. **`apps` (App Management)**: `apps:list`, `apps:validate`, `apps:install`, `apps:uninstall`, `apps:link`, `apps:toggle`
 13. **`elev` (Elevation & Governance)**: `sudo:request`, `sudo:forget`, `perm:read`, `perm:grant`, `perm:revoke`, `perm:clear`, `perm:manage`
 14. **`logs` (Audit Logging)**: `logs:read`, `logs:readSensitive`, `logs:settings:read`, `logs:settings:write`, `logs:verbose`, `logs:archive`, `logs:clear`, `audit:note`
-15. **`ui` (UI & Notifications)**: `ui:window:create`, `ui:window:control`, `ui:notification`, `ui:dialog`, `ui:clipboard:read`, `ui:clipboard:write`, `ui:theme:read`, `ui:theme:write`, `ui:wallpaper:read`, `ui:wallpaper:write`
+15. **`ui` (UI & Notifications)**: `ui:window:create`, `ui:window:control`, `ui:notification`, `ui:dialog`, `ui:clipboard:read`, `ui:clipboard:write`, `ui:theme:read`, `ui:theme:write`, `ui:wallpaper:read`, `ui:wallpaper:write`, `ui:settings`, `wallpaper:read`, `wallpaper:write`
+
+> `wallpaper:read` reads the wallpaper library and its files (images, videos, interactive packs); `wallpaper:write` uploads, imports and deletes library entries. Neither relates to `local:*`: the library sits in `wallpapers/` under the config directory and is served by dedicated endpoints rather than `localfs/*`.
 
 ---
 
@@ -635,6 +783,7 @@ Stored by default under the current user's profile configuration path (overridab
 │   └── <app-id>/
 │       ├── .qx-source  # Source path pointer for development mode links
 │       └── ...         # Extracted static files for standard installations
+├── wallpapers/         # Wallpaper library: images, videos and interactive packs (served by wallpapers/*)
 └── appdata/            # App-isolated data stores and audit records
     ├── <app-id>/       # Private persistent storage files per app
     └── logs/           # Operation audit logs and archived zip snapshots
@@ -725,3 +874,5 @@ QxSSH integrates the following open-source projects and resources. We express ou
 - **golang.org/x/crypto** (SSH protocol client and cryptography primitives): [BSD-3-Clause](https://go.googlesource.com/crypto/+/refs/heads/master/LICENSE)
 - **github.com/pkg/sftp** (SFTP protocol client implementation): [BSD-2-Clause](https://github.com/pkg/sftp/blob/master/LICENSE)
 - **github.com/gorilla/websocket** (Fast and reliable WebSocket engine): [BSD-2-Clause](https://github.com/gorilla/websocket/blob/main/LICENSE)
+- **github.com/jchv/go-webview2** (Pure-Go, CGO-free Windows WebView2 bindings): [MIT License](https://github.com/jchv/go-webview2/blob/master/LICENSE)
+- **WebView2Loader.dll** (embedded into the exe by go-webview2, from the Microsoft WebView2 SDK): [BSD-3-Clause](https://github.com/jchv/go-webview2/blob/master/webviewloader/sdk/LICENSE.txt)

@@ -1,0 +1,42 @@
+{
+  "id": "wps",
+  "name": "WPS Office",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "WPS Office Linux 版：在独立虚拟显示上编辑文档，适合服务器上临时办公",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "图形应用",
+  "keywords": [
+    "wps",
+    "office",
+    "doc",
+    "sheet"
+  ],
+  "runtime": "linux-gui",
+  "preferredSize": {
+    "width": 1100,
+    "height": 780,
+    "minWidth": 720,
+    "minHeight": 520
+  },
+  "gui": {
+    "command": [
+      "wps"
+    ],
+    "screen": {
+      "width": 1440,
+      "height": 900,
+      "depth": 24
+    },
+    "dpi": 96,
+    "fps": 30,
+    "bitrateKbps": 3000,
+    "softwareGL": false,
+    "windowManager": "auto",
+    "clipboard": true
+  }
+}

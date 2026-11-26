@@ -574,3 +574,29 @@ function appPkgRequest(target, pkg, consent) {
 
 
 
+
+
+/** 启动 Linux 图形应用会话（命令来自插件 manifest，前端只提交应用与主机） */
+export function guiStart(payload) {
+  return sysCall('gui/start', payload);
+}
+
+/** 结束 Linux 图形应用会话 */
+export function guiStop(id) {
+  return sysCall('gui/stop', { id });
+}
+
+/** 列出运行中的图形会话 */
+export function guiList() {
+  return sysGet('gui/list');
+}
+
+/** 探测目标主机缺少的图形依赖，并给出安装建议 */
+export function guiDeps(host) {
+  return sysGet('gui/deps', { host });
+}
+
+/** 拼装图形会话的画面与输入通道地址 */
+export function guiWsUrl(id, codec) {
+  return sysWsUrl('gui/session', { id, codec });
+}

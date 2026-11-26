@@ -52,17 +52,24 @@ func validateDirManifest(dir string) (appManifest, error) {
 	if m.Disableable {
 		return appManifest{}, errors.New("manifest.disableable 仅系统内置应用可用，用户应用不应声明")
 	}
+	if err := normalizeAppRuntime(&m); err != nil {
+		return appManifest{}, err
+	}
 	entryName := strings.ReplaceAll(strings.TrimPrefix(strings.TrimSpace(m.Entry), "./"), "\\", "/")
-	if entryName == "" {
+	// Linux 图形应用的窗口由宿主渲染，入口页可以省略。
+	if entryName == "" && m.Runtime != appRuntimeLinuxGUI {
 		entryName = "index.html"
 	}
-	if !strings.HasSuffix(entryName, ".html") && !strings.HasSuffix(entryName, ".htm") {
+	if entryName != "" && !strings.HasSuffix(entryName, ".html") && !strings.HasSuffix(entryName, ".htm") {
 		return appManifest{}, errors.New("manifest.entry 必须是应用入口 HTML（默认 index.html）")
 	}
 	if strings.Contains(entryName, "..") {
 		return appManifest{}, errors.New("manifest.entry 不能含 ..")
 	}
 	if m.ID == "" {
+		if entryName == "" {
+			return appManifest{}, errors.New("manifest.id 不能为空：Linux 图形应用没有入口页可推导 id")
+		}
 		m.ID = "app-" + strings.ToLower(strings.TrimSuffix(filepath.Base(entryName), ".html"))
 	}
 	if !appIDRe.MatchString(m.ID) {
@@ -105,8 +112,10 @@ func validateDirManifest(dir string) (appManifest, error) {
 		return appManifest{}, err
 	}
 	m.Apis = apis
-	if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(entryName))); err != nil || fi.IsDir() {
-		return appManifest{}, fmt.Errorf("manifest.entry 指定的文件 %q 不存在于目录", entryName)
+	if entryName != "" {
+		if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(entryName))); err != nil || fi.IsDir() {
+			return appManifest{}, fmt.Errorf("manifest.entry 指定的文件 %q 不存在于目录", entryName)
+		}
 	}
 	m.Entry = entryName
 	return m, nil

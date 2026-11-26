@@ -26,6 +26,7 @@ var permGroups = []permGroup{
 	{Key: "storage", Label: "应用私有存储", LabelKey: "core.perm.group.storage"},
 	{Key: "secret", Label: "应用机密存储", LabelKey: "core.perm.group.secret"},
 	{Key: "exec", Label: "命令执行", LabelKey: "core.perm.group.exec"},
+	{Key: "gui", Label: "图形应用", LabelKey: "core.perm.group.gui"},
 	{Key: "job", Label: "后台作业", LabelKey: "core.perm.group.job"},
 	{Key: "schedule", Label: "定时调度", LabelKey: "core.perm.group.schedule"},
 	{Key: "files", Label: "远端文件", LabelKey: "core.perm.group.files"},
@@ -79,6 +80,7 @@ var permCatalog = []permDef{
 	{ID: "exec:stream", Group: "exec", Label: "流式命令执行", LabelKey: "core.perm.exec.stream", Desc: "在受管远端主机上执行命令并实时流式接收标准输出与标准错误", DescKey: "core.perm.exec.stream.desc", Danger: 3},
 	{ID: "exec:session", Group: "exec", Label: "命令执行通道", LabelKey: "core.perm.exec.session", Desc: "通过 WebSocket 会话双向流式收发命令输入与执行输出", DescKey: "core.perm.exec.session.desc", Danger: 3},
 	{ID: "local:exec", Group: "exec", Label: "宿主机命令执行", LabelKey: "core.perm.local.exec", Desc: "在运行 QxSSH 的宿主机上执行任意命令、读取其输出并启动/停止后台进程", DescKey: "core.perm.local.exec.desc", Danger: 3},
+	{ID: "gui:launch", Group: "gui", Label: "运行 Linux 图形应用", LabelKey: "core.perm.gui.launch", Desc: "在受管 Linux 主机上启动带独立 X 显示的原生图形应用（微信、QQ、WPS、Blender 等），并向其注入键鼠与剪贴板操作", DescKey: "core.perm.gui.launch.desc", Danger: 3},
 
 	// 6. 后台作业
 	{ID: "job:list", Group: "job", Label: "查看后台作业列表", LabelKey: "core.perm.job.list", Desc: "读取受管主机上保存的后台持久化作业清单", DescKey: "core.perm.job.list.desc", Danger: 1},
@@ -173,6 +175,8 @@ var permCatalog = []permDef{
 	// 15. 界面与通知
 	{ID: "ui:notify", Group: "ui", Label: "发送系统通知", LabelKey: "core.perm.ui.notify", Desc: "通过系统通知中心弹出桌面通知", DescKey: "core.perm.ui.notify.desc", Danger: 1, UI: true},
 	{ID: "ui:settings", Group: "ui", Label: "更改系统全局设置", LabelKey: "core.perm.ui.settings", Desc: "修改主题、壁纸、任务栏位置、桌面图标布局等全局界面设置", DescKey: "core.perm.ui.settings.desc", Danger: 2, UI: true},
+	{ID: "wallpaper:read", Group: "ui", Label: "读取壁纸库", LabelKey: "core.perm.wallpaper.read", Desc: "读取壁纸库清单与壁纸文件，包含图片、视频与交互壁纸包", DescKey: "core.perm.wallpaper.read.desc", Danger: 1, UI: true},
+	{ID: "wallpaper:write", Group: "ui", Label: "管理壁纸库", LabelKey: "core.perm.wallpaper.write", Desc: "上传、导入与删除壁纸库中的图片、视频和交互壁纸包", DescKey: "core.perm.wallpaper.write.desc", Danger: 2, UI: true},
 }
 
 // permAliases 提供旧版别名向新规范的透明映射，保证向后兼容。

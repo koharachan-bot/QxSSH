@@ -25,6 +25,7 @@ QxSSH 是一个用 Go 编写的单二进制自托管 Web 应用。它把一台�
 - [核心功能详解](#核心功能详解)
   - [主机与跳板机链](#主机与跳板机链)
   - [Web 终端与命令执行](#web-终端与命令执行)
+  - [终端界面（TUI）](#终端界面tui)
   - [文件管理（SFTP 与宿主机）](#文件管理sftp-与宿主机)
   - [端口转发与内网 Web 代理](#端口转发与内网-web-代理)
   - [sudo 提权与定时任务](#sudo-提权与定时任务)
@@ -40,7 +41,7 @@ QxSSH 是一个用 Go 编写的单二进制自托管 Web 应用。它把一台�
 - [HTTP 与 WebSocket API 参考](#http-与-websocket-api-参考)
   - [API 设计与调用约定](#api-设计与调用约定)
   - [全量端点清单](#全量端点清单)
-  - [15 大权限分组与 95 项细粒度 Scope](#15-大权限分组与-95-项细粒度-scope)
+  - [15 大权限分组与 97 项细粒度 Scope](#15-大权限分组与-95-项细粒度-scope)
 - [数据与配置目录](#数据与配置目录)
 - [开发与构建](#开发与构建)
 - [Git 忽略与构建产物说明](#git-忽略与构建产物说明)
@@ -65,6 +66,7 @@ QxSSH 是一个用 Go 编写的单二进制自托管 Web 应用。它把一台�
 - **sudo 会话提权**：按主机申请管理员权限，密码仅在内存中缓存（默认 30 分钟），支持主动遗忘清空。
 - **定时任务引擎**：内置 cron 表达式调度器，支持在指定主机上定期执行自动化命令。
 - **深度审计留痕**：详细记录每一次 API 调用的发起应用、目标主机、接口方法、耗时与结果；详细模式下请求头与请求体采用 AES-256-GCM 加密落盘，支持按工作区轮转、脱敏归档打包与保留期淘汰。
+- **可插拔界面后端**：web（浏览器控制台）、tui（终端界面）、gui（Windows WebView2 桌面窗口）三套界面共用同一个核心，`-web` / `-tui` / `-gui` 可任意组合；一个开关都不给时默认 `gui`（Windows 上直接弹出桌面窗口）。终端界面不监听端口，直接复用连接池与配置存储。
 - **微内核插件生态**：内置 11 款核心系统应用，支持通过 `.qxp` 包、下载链接或 Git 仓库安装第三方应用，支持本地开发目录软链接；应用具备细粒度权限控制与零默认放行原则。
 - **应用私有存储与机密**：每个应用享有独立的磁盘存储空间与经 AES-256-GCM 加密保护的私有机密键值库。
 - **原生多语言国际化**：内置中 / 英文完整词表，宿主与应用各自分离，服务端支持基于 `Accept-Language` 的智能协商。
@@ -77,6 +79,7 @@ QxSSH 是一个用 Go 编写的单二进制自托管 Web 应用。它把一台�
 
 - **Go 1.27+**
 - 纯 Go 实现，无 CGO 依赖，无 Node.js 构建步骤。
+- **gui 插件仅支持 Windows**，运行时需要系统已安装 Microsoft Edge WebView2 Runtime（Windows 10/11 通常随 Edge 预装）；`WebView2Loader.dll` 已内嵌进可执行文件，无需随包分发。
 
 ### 构建与运行
 
@@ -84,22 +87,38 @@ QxSSH 是一个用 Go 编写的单二进制自托管 Web 应用。它把一台�
 # 1. 编译可执行文件
 go build -o qxssh .
 
-# 2. 本地运行（默认监听 127.0.0.1:8800）
+# 2. 本地运行（不带界面开关时默认 gui：Windows 上打开 WebView2 桌面窗口）
 ./qxssh
 
 # 3. 启动后自动调用系统默认浏览器打开控制台
 ./qxssh -open
 
-# 4. 对外网 / 局域网暴露服务（必须配置鉴权令牌）
+# 4. 只开终端界面（不监听端口，直接在本机终端里管理主机）
+./qxssh -tui
+
+# 5. 浏览器控制台与终端界面同时运行（一个进程内自由组合）
+./qxssh -web -tui
+
+# 6. 对外网 / 局域网暴露服务（必须配置鉴权令牌）
 ./qxssh -addr 0.0.0.0:8800 -auth-token "your-secure-token"
 ```
 
-在 Windows PowerShell 下编译产物为 `qxssh.exe`：
+三套界面是同一个核心之上的可插拔插件：`web`（浏览器控制台，监听 `-addr`）、`gui`（Windows WebView2 桌面窗口，内部只绑 `127.0.0.1` 的随机端口并加载同一套前端）、`tui`（终端界面，不经过 HTTP）。`-web` / `-tui` / `-gui` 可任意组合；一个都不给时默认启动 `gui`。`gui` 的 WebView2Loader.dll 已内嵌进可执行文件，发布物仍是单个 exe，运行时只需系统装有 WebView2 Runtime（Windows 10/11 通常随 Edge 预装）。`-web` 与 `-gui` 可同时运行：web 占用 `-addr`，gui 使用自己的内部回环随机端口，互不冲突。gui 窗口关闭时该端口立即释放，不会残留占用。
+
+以 `windowsgui` 子系统构建后，双击 exe（默认 gui）时**不会创建任何控制台窗口**；`-web` 会接回启动它的终端并打印访问地址，`-tui` 使用自己新建的控制台（避免与父 shell 争抢输入）。启动失败且没有可用控制台时，程序会弹出原生错误对话框，而不是静默退出。
+
+在 Windows PowerShell 下编译产物为 `qxssh.exe`。**请使用 GUI 子系统链接**，否则 gui 窗口会附带一个控制台黑窗：
 
 ```powershell
-go build -o qxssh.exe .
-.\qxssh.exe -open
+# 推荐：以 GUI 子系统链接，双击启动 gui 时不出现控制台窗口
+go build -ldflags "-H windowsgui" -o qxssh.exe .
+.\qxssh.exe
+
+# 或直接使用仓库提供的构建脚本
+.\build-windows.ps1
 ```
+
+使用 `windowsgui` 构建后：默认 gui 双击启动完全没有控制台；`-web` 会接回启动它的终端并打印访问地址（双击启动且没有终端时不会额外开黑窗，地址写入 `-log-file` 指定的日志）；`-tui` 从终端启动时复用该终端，双击启动时会自建一个控制台窗口用于交互。启动失败且没有控制台时，会弹出原生错误对话框而不是静默退出。
 
 ### 首次登录
 
@@ -111,9 +130,13 @@ go build -o qxssh.exe .
 
 | 命令行参数 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `-addr` | `QXSSH_ADDR` | `127.0.0.1:8800` | HTTP 服务监听地址 |
+| `-addr` | `QXSSH_ADDR` | `127.0.0.1:8800` | web 插件的 HTTP 监听地址（gui 只在 `127.0.0.1` 上取内核分配的随机端口，不受此参数影响） |
 | `-conf` | `QXSSH_CONF` | 用户配置目录下的 `qxssh` | 数据与配置存储根目录 |
-| `-open` | `QXSSH_OPEN` | `false` | 启动完成后自动使用默认浏览器打开控制台 |
+| `-web` | `QXSSH_WEB` | `false` | 启用浏览器控制台插件 |
+| `-tui` | `QXSSH_TUI` | `false` | 启用终端界面插件 |
+| `-gui` | `QXSSH_GUI` | `false` | 启用 Windows WebView2 桌面窗口插件 |
+| `-open` | `QXSSH_OPEN` | `false` | web 插件启动后自动使用默认浏览器打开控制台 |
+| `-tls-cert` / `-tls-key` | `QXSSH_TLS_CERT` / `QXSSH_TLS_KEY` | 留空 | PEM 证书与私钥，成对提供时以 HTTPS 提供服务 |
 | `-log-level` | `QXSSH_LOG_LEVEL` | `info` | 日志过滤级别：`debug` / `info` / `warn` / `error` / `silent` |
 | `-log-file` | `QXSSH_LOG_FILE` | 留空（仅输出到控制台） | 日志输出路径；设为 `auto` 则写入 `<配置目录>/logs/qxssh.log` |
 | `-auth-token` | `QXSSH_AUTH_TOKEN` | 留空（仅允许回环地址） | 外部访问全局鉴权令牌；非回环监听时为强制必填项 |
@@ -147,7 +170,7 @@ QxSSH 具备执行任意系统命令、管理远程文件与操作敏感凭据�
 3. **宿主与应用双层会话隔离**：
    宿主界面（`index.html` 与 `desktop.html`）仅在**可信 Host 的顶层文档导航**（`Sec-Fetch-Mode: navigate` 且 `Sec-Fetch-Dest: document`）时注入每次启动随机生成的宿主令牌（Host Token）；免鉴权回环部署下 Host 头白名单拒绝 DNS rebinding。第三方应用运行于 `iframe` 沙箱中，无法接触宿主令牌；应用会话令牌由宿主经 `POST /api/v1/session/mint` 铸造，绑定应用身份与受限 Scope，且仅在应用以每帧握手密钥完成 `ready` 握手后投递（iframe load 不再无条件推送）。活跃刷新会话上限 256 条，刷新令牌以 SHA-256 哈希落库并轮换，重用即整体撤销。
 4. **零默认权限原则（Zero Default Permissions）**：
-   系统定义了 15 个分组共 95 项细粒度权限（Scope）。所有权限项默认均为 `false`（无放行权限）。第三方应用访问私有存储、读写机密或调用任何系统 API，都必须在 `manifest.json` 中明确声明；安装时低危权限随安装授予，**高危权限（Danger≥2）仅授予安装确认页逐项确认过的项**，其余延迟到运行时经权限弹窗请求。宿主拥有全量权限；内置应用按 manifest 声明最小授权。
+   系统定义了 15 个分组共 97 项细粒度权限（Scope）。所有权限项默认均为 `false`（无放行权限）。第三方应用访问私有存储、读写机密或调用任何系统 API，都必须在 `manifest.json` 中明确声明；安装时低危权限随安装授予，**高危权限（Danger≥2）仅授予安装确认页逐项确认过的项**，其余延迟到运行时经权限弹窗请求。宿主拥有全量权限；内置应用按 manifest 声明最小授权。
 5. **主密钥与凭据库分离**：
    主机凭据与应用机密以 AES-256-GCM 加密存于 `data.db`；主密钥独立存于配置目录 `master.key`（0600），单独泄露数据库文件不再等于凭据泄露。设置 `QXSSH_MASTER_PASSPHRASE` 后主密钥以 Argon2id 派生密钥包裹，口令错误拒绝启动。
 6. **首次信任主机公钥校验（TOFU 机制）**：
@@ -165,9 +188,11 @@ QxSSH 具备执行任意系统命令、管理远程文件与操作敏感凭据�
 
 ```
 QxSSH/
-├── main.go                     # 主程序入口：命令行解析、安全预检、日志装配与优雅退出
+├── main.go                     # 主程序入口：命令行解析、界面插件选择、核心装配与优雅退出
 ├── internal/
-│   ├── bootstrap/              # 依赖装配：拼装连接池、端口转发、Web 代理、HTTP 网关及级联钩子
+│   ├── console/                # 界面插件层：web / gui（Windows WebView2） / tui 的注册、选择与生命周期
+│   ├── tui/                    # 终端界面：ANSI 渲染、终端原始模式、主机面板与 SSH 交互会话
+│   ├── bootstrap/              # 核心装配：拼装连接池、端口转发、Web 代理与 API 网关（不含端口监听）
 │   ├── config/                 # 数据存储层：纯 Go SQLite 操作、AES-256-GCM 加解密、OpenSSH 配置解析
 │   ├── sshpool/                # SSH 连接池：跳板链穿透、Keepalive 保活、主机密钥校验、操作系统探测
 │   ├── tunnel/                 # 端口转发注册表：本地转发、远程转发与 SOCKS5 动态代理
@@ -183,17 +208,22 @@ QxSSH/
 ### 核心组件拓扑
 
 ```
-               ┌────────────────────────────────────────────────────────┐
-用户浏览器 ────▶│  httpapi.Gateway（路由分派 / 权限校验 / 会话控制 / 审计日志）   │
-(HTTP / WS)    └──────────┬──────────────┬──────────────┬───────────────┘
-                          │              │              │
-                   config.Store    sshpool.Pool   tunnel / proxy
-                   (SQLite+加密)   (SSH 连接池)   (端口转发与 Web 反代)
+浏览器（HTTP / WS） ──▶ ┌──────────────── console 插件层 ────────────────┐
+                        │ web  ──▶ httpapi.Gateway ──┐                  │
+本机终端（ANSI）   ──▶  │ tui  ─────────────────────┼──┐               │
+                        │ gui  = WebView2 窗口 ──────┼──┤               │
+                        └───────────────────────────┼──┼───────────────┘
+                                                    │  │
+                             ┌──────────────────────▼──▼───────────────┐
+                             │ bootstrap.Core：config.Store / sshpool.Pool │
+                             │                tunnel / proxy 注册表        │
+                             └────────────────────────────────────────────┘
 ```
 
-- **`bootstrap`**：统一组装各底层子系统，注册连接池失效时级联关闭对应端口转发和 Web 代理的事件监听。
+- **`console`**：界面插件注册表，按 `-web` / `-tui` / `-gui` 组合启动；任一界面退出即取消其余界面。web 与 gui 共用同一个 HTTP 宿主，gui 在内部回环端口上把同一套前端交给 WebView2。
+- **`bootstrap`**：统一组装各底层子系统，注册连接池失效时级联关闭对应端口转发和 Web 代理的事件监听；不持有监听器，HTTP 由 web / gui 插件负责。
 - **`sshpool`**：所有远程 SSH 能力的唯一出口，统一管理多级跳板链拨号、连接复用与失效淘汰。
-- **`httpapi`**：采用表驱动的网关架构，每个端点均静态声明请求谓词、路径与所需权限，服务启动时强制校验权限有效性。
+- **`httpapi`**：采用表驱动的网关架构，每个端点均静态声明请求谓词、路径与所需权限，服务启动时强制校验权限有效性；供 web / gui 插件使用，TUI 直接调用核心层。
 
 ---
 
@@ -201,7 +231,7 @@ QxSSH/
 
 ### 主机与跳板机链
 
-- 主机参数包含名称、分组、IP / 域名、SSH 端口、用户名、认证类型（密码 / 私钥）、密码文本、私钥文件路径或私钥文本内容、私钥密码短语、备注说明与关联跳板机。
+- 主机参数包含名称、分组、IP / 域名、SSH 端口、用户名、认证类型（密码 / 私钥 / 无密码）、密码文本、私钥文件路径或私钥文本内容、私钥密码短语、备注说明与关联跳板机。「无密码」不发送任何凭据，只走 SSH 的 none 认证，适合受控网络、容器或回环地址上已配置免密的主机。
 - 跳板机链最高支持 5 级（`MaxJumpDepth = 5`）；创建或更新主机配置时，系统会深度遍历并阻断循环引用与超深跳板。
 - 若某台主机正被其它主机作为跳板使用，系统会直接拒绝删除操作，并清晰提示依赖该跳板的所有下游主机清单。
 - 支持批量导入 OpenSSH 风格的 `~/.ssh/config` 配置，智能提取 `Host`、`HostName`、`User`、`Port`、`IdentityFile` 及 `ProxyJump` 字段。
@@ -212,6 +242,16 @@ QxSSH/
 - 终端通过 `/api/v1/ws/term/session` WebSocket 端点与后端进行双向全双工桥接，支持 PTY 窗口尺寸（cols / rows）动态伸缩通知。
 - 命令执行严格区分**远端主机执行**（`exec:run`）与**宿主机本地执行**（`local:exec`）。若请求中 `host` 字段留空，则明确认定为在运行 QxSSH 程序的宿主机本地执行。
 - 创新性实现脱机后台持久化作业（Background Jobs）：后台任务将进程 PID、启动时间与输出重定向文件存储在目标远端主机的 `~/.qxssh/jobs/<job-id>` 目录下，通过轻量级文件交互拉取状态与日志，即使关闭浏览器或断开 SSH 连接，后台任务依然稳定运行。
+
+### 终端界面（TUI）
+
+`qxssh -tui` 直接在本机终端里管理主机，不监听端口、不需要浏览器：
+
+- **主机列表**：↑ / ↓（或 k / j）选择主机，Enter 连接，r 重新载入主机列表，`/` 输入过滤条件（空格分词、多词 AND 模糊匹配，Enter 确认、Esc 取消），q 退出。
+- **会话页**：全屏转发远端 PTY shell，终端尺寸变化时自动同步远端窗口；按 `Ctrl+]` 断开并回到列表，远端 shell 自行退出时显示退出状态码。
+- **日志**：终端被 TUI 占用期间，控制台日志自动静默（`-log-file` 指定的文件日志不受影响），避免日志打断全屏渲染。
+- **降级**：stdin / stdout 不是 TTY 时（重定向、CI）立即返回中文错误并退出，绝不阻塞。
+- 与 `-web` 同时给出时，两个界面在同一进程内并行；TUI 退出会结束整个进程（浏览器控制台随之关闭）。
 
 ### 文件管理（SFTP 与宿主机）
 
@@ -247,7 +287,7 @@ QxSSH/
 
 ## 内置应用体系
 
-QxSSH 桌面采用模块化微前端架构，系统自带的 11 款内置应用均采用与第三方应用完全一致的 SDK 接口与 `manifest.json` 规范开发，具备高度一致的交互体验：
+QxSSH 桌面采用模块化微前端架构，系统自带的内置应用均采用与第三方应用完全一致的 SDK 接口与 `manifest.json` 规范开发，具备高度一致的交互体验：
 
 | 应用名称 | 应用 ID | 分类 | 功能描述 |
 | --- | --- | --- | --- |
@@ -259,17 +299,27 @@ QxSSH 桌面采用模块化微前端架构，系统自带的 11 款内置应用�
 | **批量执行** | `batch` | 工具 | 跨多台主机并发分发执行 shell 命令并聚合统计结果 |
 | **任务管理器** | `taskmon` | 系统 | 实时监控远端 CPU / 内存负载、查看进程树并支持提权结束进程 |
 | **审计日志** | `logs` | 系统 | 实时检索操作日志、查看权限授权变更与日志归档下载 |
-| **系统设置** | `settings` | 系统 | 个性化桌面主题、Hero Patterns 纹理壁纸、任务栏样式与偏好设置 |
+| **系统设置** | `settings` | 系统 | 个性化桌面主题、任务栏样式与偏好设置；壁纸入口指向壁纸猫猫 |
+| **壁纸猫猫** | `wallpapercat` | 系统 | 壁纸的唯一管理入口：图片 / 视频 / 交互壁纸包 / 内置交互引擎与纹理统一挑选、上传、删除，含轮播、声音、指针交互与填充方式 |
 | **应用管理器** | `store` | 系统 | 浏览已安装应用、从 Git 仓库/下载链接/本地 `.qxp` 安装、启用 / 禁用与卸载管理 |
 | **Systemd 管理器** | `systemd` | 系统 | Linux 系统服务、套接字与定时器的状态查看与启停管控（需主机运行 systemd） |
+| **Docker 管理器** | `docker` | 系统 | 容器 / 镜像 / 网络 / 卷 / Compose 管理：实时彩色日志、交互式容器终端、镜像构建、国内镜像加速站一键配置、傻瓜（一键操作与卡片）/ 专业（完整表格与控制台）双模式 |
+| **Kubernetes 管理器** | `k8s` | 系统 | 集群、工作负载、Pod、服务、节点与事件管理：彩色 Pod 日志、YAML 编辑与干跑、kubectl 控制台、傻瓜 / 专业双模式 |
 
-Docker 管理不再随主程序分发。官方出品应用仓库：
+> **壁纸系统**：桌面壁纸支持六种形态——图片、视频、交互壁纸包、内置交互引擎、纯色与纹理，并按「桌面 / 启动页」与「浅色 / 深色」分别记忆。
+>
+> - **视频壁纸**：`mp4` / `webm` / `ogv` / `mov` 等浏览器原生容器，可选声音（自动播放策略要求桌面首次点击后才解除静音）、音量、播放速度、循环与「切到后台暂停」。
+> - **交互壁纸**：导入含 `index.html` 的 zip 包，或用 `wallpaper.json` 声明入口 / 标题 / 是否带音频。包在无 `allow-same-origin` 的 iframe 沙箱里运行，读不到宿主会话令牌；宿主通过 `postMessage` 广播 `{__qxWall:1, type:pointer, x, y, down}`，也可临时「接管指针」进入沉浸交互（Esc 或 4 秒后自动退出）。
+> - **内置交互引擎**：`assets/js/desktop/wallpaper-engine.js` 里现画的四套 canvas 动画（猫猫星尘 / 极光流 / 雨窗 / 星轨），随指针与主题变化，不占磁盘、不联网。
+> - **轮播**：按间隔自动更换桌面壁纸，可设随机顺序与参与清单。
+
+Docker 与 Kubernetes 管理器已随主程序内置，开箱可用。官方出品应用仓库仍收录其最新版本与其它官方应用：
 
 ```
 https://github.com/QingXuan2000/QxSSH-AppStore.git
 ```
 
-仓库里每个应用放在独立的 `apps/<应用 ID>` 子目录，Docker 管理位于 `apps/docker`。在应用管理器「从 Git 仓库安装」中填入上面的仓库地址、子目录填 `apps/docker` 即可直接克隆安装；也可以用「链接目录」指向该路径调试，或打包成 `.qxp` 上传安装。该地址在安装界面里常驻显示，可一键复制或填入。
+仓库里每个应用放在独立的 `apps/<应用 ID>` 子目录，例如 Docker 管理器位于 `apps/docker`。若想用仓库中的版本覆盖内置版本，可在应用管理器「从 Git 仓库安装」中填入上面的仓库地址、子目录填 `apps/docker`（或 `apps/k8s`）克隆安装；也可以用「链接目录」指向该路径调试，或打包成 `.qxp` 上传安装。该地址在安装界面里常驻显示，可一键复制或填入。
 
 Git 仓库安装由内置的纯 Go Git 引擎完成（`go-git`），**运行 QxSSH 不需要在服务器上额外安装 git 命令行工具**。
 
@@ -422,6 +472,81 @@ zip -r ../my-app.qxp . -x "*.git*"
 
 在桌面打开「应用管理器」点击「安装应用」，选择打包好的 `.qxp` 文件即可完成安装。安装时 `manifest.json` 中声明的权限将随安装操作一并获得用户授权。
 
+### Linux 图形应用插件（runtime=linux-gui）
+
+普通插件的 `entry` 指向一个 `index.html`，窗口里是 Web 应用；**Linux 图形应用插件**则声明 `runtime: "linux-gui"`，
+由 QxSSH 在一台受管 Linux 主机上开一块独立的虚拟 X 显示（Xvfb），把原生程序（微信、QQ、WPS、Blender……）跑在里面，
+再用 H.264（WebCodecs 解码，JPEG 兜底）把画面编码后送到浏览器窗口，并把窗口里的键鼠与剪贴板回传给远端。
+与 VNC 相比，这种会话是常驻的、断线可重连、缩放与分辨率解耦，交互更接近远程桌面。
+
+插件包本身很小：只有 `manifest.json` 与图标，真正的程序留在目标主机上。
+
+```json
+{
+  "id": "wechat",
+  "name": "微信",
+  "runtime": "linux-gui",
+  "icon": "icon.svg",
+  "category": "图形应用",
+  "preferredSize": { "width": 980, "height": 760 },
+  "gui": {
+    "command": ["wechat"],
+    "screen": { "width": 1200, "height": 820, "depth": 24 },
+    "fps": 30,
+    "bitrateKbps": 2500,
+    "softwareGL": false,
+    "windowManager": "auto",
+    "clipboard": true
+  }
+}
+```
+
+`gui` 字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `command` | 必填，启动命令（argv 数组，不经 shell 拼接，不会被注入） |
+| `args` | 可选，追加参数 |
+| `env` | 可选，额外环境变量 |
+| `screen` | 虚拟画面尺寸与色深（默认 1280×800×24，宽高 320~3840，色深 16 或 24） |
+| `dpi` | 显示 DPI（默认 96） |
+| `fps` / `bitrateKbps` | 画面帧率与码率（默认 30 / 2500） |
+| `softwareGL` | 无 GPU 时强制 Mesa 软件渲染（Blender 等需要 OpenGL 的程序建议开启） |
+| `windowManager` | `auto` / `none` / `openbox` / `fluxbox` |
+| `clipboard` | 是否同步剪贴板 |
+| `install` | 重量级程序的按需安装描述（见下） |
+
+**目标主机依赖**：`Xvfb`、`ffmpeg`、`python3`（键鼠注入），可选 `xclip`（剪贴板）与 `openbox`。
+缺少时启动会直接报错并给出对应的 `apt-get` / `dnf` / `pacman` 安装命令，装好后重试即可。
+
+**重量级程序按需安装**：Blender 这类几百 MB 的运行时不适合塞进 `.qxp`，可在 `gui.install` 里声明官方压缩包：
+
+```json
+"install": {
+  "url": "https://download.blender.org/release/Blender4.5/blender-4.5.13-linux-x64.tar.xz",
+  "sha256": "da4e69b0…",
+  "dest": "blender-4.5.13",
+  "stripComponents": 1,
+  "bin": "blender"
+}
+```
+
+首次启动时下载到 `~/.local/share/qxssh/runtimes/<应用 id>/`，校验 SHA-256 后解压；之后复用，不再重复下载。
+
+**打包命令**（仓库自带工具）：
+
+```bash
+go run ./tools/packgui -dir examples/gui-apps/wechat -out dist/wechat.qxp
+# 或直接从目标机上的 .desktop 生成
+go run ./tools/packgui -desktop /usr/share/applications/wechat.desktop -id wechat -out dist/wechat.qxp
+```
+
+`examples/gui-apps/` 下提供了微信、QQ、WPS 与 Blender 3.6 LTS / 4.5 LTS / 5.3 LTS 六个可直接打包的模板。
+**Blender 官方没有 4.6 版本**，4.x 维护分支是 4.5 LTS（详见该目录的 README）。
+
+> 限制说明：键盘按物理键位映射到 X11 keysym，中文等非 ASCII 字符请用剪贴板粘贴；窗口内是等比缩放，
+> 想改会话分辨率需要结束会话后重新启动。
+
 ### 示例应用模板
 
 项目中提供了完整的官方参考实现：[`examples/Examples/`](examples/Examples/)（详见其 [README.md](examples/Examples/README.md)）。该示例应用覆盖了 100% 的 SDK 模块与 UI 组件，并包含自检机制，是开发第三方应用的理想模板。
@@ -522,6 +647,16 @@ zip -r ../my-app.qxp . -x "*.git*"
 | `POST` | `/api/v1/files/upload` | `server:upload` | 向远端主机流式上传文件 |
 | `POST` | `/api/v1/files/attrs` | `server:attrs` | 修改远端文件的 POSIX 权限位与属主 |
 
+#### 5.1 Linux 图形应用（GUI 插件）
+
+| 请求方法 | 接口端点 | 所需权限 | 功能说明 |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/gui/start` | `gui:launch` | 在目标主机创建独立 X 显示并启动插件声明的图形应用，返回会话信息 |
+| `POST` | `/api/v1/gui/stop` | `gui:launch` | 结束图形会话并清理目标主机上的进程与会话目录 |
+| `GET` | `/api/v1/gui/list` | `gui:launch` | 列出运行中的图形会话（窗口重开时用来恢复现场） |
+| `GET` | `/api/v1/gui/deps` | `gui:launch` | 探测目标主机缺少的 Xvfb / ffmpeg / python3 等依赖并给出安装命令 |
+| `GET` (WS) | `/api/v1/ws/gui/session` | `gui:launch` | 画面（H.264 / JPEG 二进制帧）与输入（JSON 指令）的双向通道 |
+
 #### 6. 提权、网络隧道与代理
 
 | 请求方法 | 接口端点 | 所需权限 | 功能说明 |
@@ -547,7 +682,7 @@ zip -r ../my-app.qxp . -x "*.git*"
 | `POST` | `/api/v1/apps/link` | `apps:link` | 软链接本地开发目录为实时应用 |
 | `POST` | `/api/v1/apps/enabled` | `apps:toggle` | 切换指定应用的启用 / 禁用状态 |
 | `GET` | `/api/v1/apps/file/{id}/{path...}` | 公开 | 获取已安装应用包内的静态资产文件（如图标） |
-| `GET` | `/api/v1/perm/catalog` | 公开 | 获取系统全量 95 项细粒度权限规范目录 |
+| `GET` | `/api/v1/perm/catalog` | 公开 | 获取系统全量 97 项细粒度权限规范目录 |
 | `GET` | `/api/v1/perm/granted` | `perm:granted` | 查询当前应用自身已获得的权限列表 |
 | `GET` | `/api/v1/perm/grants` | `perm:read` | 查询所有已注册应用的权限分配详情 |
 | `POST` | `/api/v1/perm/grant` | `perm:grant` | 批量向指定应用授予权限节点 |
@@ -580,6 +715,18 @@ zip -r ../my-app.qxp . -x "*.git*"
 | `POST` | `/api/v1/localfs/rename` | `local:rename` | 重命名宿主机本地文件或目录 |
 | `POST` | `/api/v1/localfs/delete` | `local:delete` | 彻底删除宿主机本地文件或目录 |
 
+#### 9.1 壁纸库（图片 / 视频 / 交互壁纸包）
+
+| 请求方法 | 接口端点 | 所需权限 | 功能说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/wallpapers/list` | `wallpaper:read` | 列出壁纸库条目，并下发文件端点的能力令牌与上传上限 |
+| `POST` | `/api/v1/wallpapers/upload?name=<文件名>` | `wallpaper:write` | 以原始字节上传图片或视频壁纸（按扩展名判定类型） |
+| `POST` | `/api/v1/wallpapers/import?name=<包名>` | `wallpaper:write` | 导入交互壁纸 zip 包（原子解包到独立子目录） |
+| `POST` | `/api/v1/wallpapers/delete` | `wallpaper:write` | 删除壁纸库中的文件或交互壁纸包目录 |
+| `GET` | `/api/v1/wallpapers/file/<令牌>/<条目名>[/<包内路径>]` | 能力令牌 | 投递壁纸文件，支持 Range（视频拖动播放）；交互包 HTML 附带沙箱 CSP |
+
+壁纸库位于 `<配置目录>/wallpapers/`：单文件图片与视频平铺在库根，交互壁纸包是含 `index.html`（或用 `wallpaper.json` 声明入口）的子目录。该目录不经 `localfs/*` 暴露——宿主机文件接口对配置目录整体拒绝访问，壁纸由本组端点专管，鉴权走能力令牌而非会话令牌，因此 `<video>` 与 `<iframe>` 可以直接引用地址。
+
 #### 10. 偏好设置与审计日志
 
 | 请求方法 | 接口端点 | 所需权限 | 功能说明 |
@@ -598,15 +745,16 @@ zip -r ../my-app.qxp . -x "*.git*"
 
 ---
 
-### 15 大权限分组与 95 项细粒度 Scope
+### 16 大权限分组与 98 项细粒度 Scope
 
-系统权限体系按照最小权限原则划分为 15 个功能分组，每个权限节点（Scope）具备独立的危险级别定义（1-低危、2-中危、3-高危）：
+系统权限体系按照最小权限原则划分为 16 个功能分组，每个权限节点（Scope）具备独立的危险级别定义（1-低危、2-中危、3-高危）：
 
 1. **`read`（只读查询）**：`local:hostinfo`、`perm:granted`
 2. **`prefs`（偏好设置）**：`prefs:read`、`prefs:write`、`prefs:self:read`、`prefs:self:write`
 3. **`storage`（应用私有存储）**：`storage:list`、`storage:read`、`storage:write`、`storage:delete`、`storage:mkdir`、`storage:rename`
 4. **`secret`（应用机密存储）**：`secret:read`、`secret:write`、`secret:delete`、`secret:list`
 5. **`exec`（命令执行）**：`exec:run`、`exec:stream`、`exec:session`、`term:open`
+5.1 **`gui`（图形应用）**：`gui:launch`
 6. **`job`（后台长作业）**：`job:run`、`job:status`、`job:output`、`job:kill`、`job:list`、`job:delete`
 7. **`schedule`（定时调度）**：`schedule:list`、`schedule:create`、`schedule:update`、`schedule:delete`、`schedule:run`
 8. **`files`（远端 SFTP 文件）**：`server:stat`、`server:read`、`server:download`、`server:upload`、`server:mkdir`、`server:rename`、`server:copy`、`server:move`、`server:delete`、`server:attrs`
@@ -616,7 +764,9 @@ zip -r ../my-app.qxp . -x "*.git*"
 12. **`apps`（应用插件管理）**：`apps:list`、`apps:validate`、`apps:install`、`apps:uninstall`、`apps:link`、`apps:toggle`
 13. **`elev`（提权与授权治理）**：`sudo:request`、`sudo:forget`、`perm:read`、`perm:grant`、`perm:revoke`、`perm:clear`、`perm:manage`
 14. **`logs`（审计日志）**：`logs:read`、`logs:readSensitive`、`logs:settings:read`、`logs:settings:write`、`logs:verbose`、`logs:archive`、`logs:clear`、`audit:note`
-15. **`ui`（界面与桌面交互）**：`ui:window:create`、`ui:window:control`、`ui:notification`、`ui:dialog`、`ui:clipboard:read`、`ui:clipboard:write`、`ui:theme:read`、`ui:theme:write`、`ui:wallpaper:read`、`ui:wallpaper:write`
+15. **`ui`（界面与桌面交互）**：`ui:window:create`、`ui:window:control`、`ui:notification`、`ui:dialog`、`ui:clipboard:read`、`ui:clipboard:write`、`ui:theme:read`、`ui:theme:write`、`ui:wallpaper:read`、`ui:wallpaper:write`、`ui:settings`、`wallpaper:read`、`wallpaper:write`
+
+> `wallpaper:read` 读取壁纸库清单与文件（含视频与交互壁纸包）；`wallpaper:write` 上传、导入与删除壁纸库条目。两者与 `local:*` 无关：壁纸库位于配置目录下的 `wallpapers/`，由专用端点而非 `localfs/*` 访问。
 
 ---
 
@@ -640,6 +790,7 @@ zip -r ../my-app.qxp . -x "*.git*"
 │   └── <app-id>/
 │       ├── .qx-source  # （若为开发链接）记录本地源码绝对路径
 │       └── ...         # （若为正式安装）解包后的应用完整静态文件
+├── wallpapers/         # 壁纸库：图片、视频与交互壁纸包（由 wallpapers/* 端点专管）
 └── appdata/            # 各应用私有持久化数据存储与操作审计日志
     ├── <app-id>/       # 单个应用的私有存储文件（受 storage:* 权限保护）
     └── logs/           # 操作审计日志与轮转归档的 zip 文件
@@ -730,3 +881,5 @@ QxSSH 的用户界面与底层运行时整合了以下优秀的开源项目与�
 - **golang.org/x/crypto**（SSH 客户端协议栈与现代密码学实现）：[BSD-3-Clause](https://go.googlesource.com/crypto/+/refs/heads/master/LICENSE)
 - **github.com/pkg/sftp**（SFTP 客户端子协议实现）：[BSD-2-Clause](https://github.com/pkg/sftp/blob/master/LICENSE)
 - **github.com/gorilla/websocket**（高效稳定的 WebSocket 协议引擎）：[BSD-2-Clause](https://github.com/gorilla/websocket/blob/main/LICENSE)
+- **github.com/jchv/go-webview2**（纯 Go 无 CGO 的 Windows WebView2 绑定）：[MIT License](https://github.com/jchv/go-webview2/blob/master/LICENSE)
+- **WebView2Loader.dll**（随 go-webview2 内嵌进 exe，源自 Microsoft WebView2 SDK）：[BSD-3-Clause](https://github.com/jchv/go-webview2/blob/master/webviewloader/sdk/LICENSE.txt)

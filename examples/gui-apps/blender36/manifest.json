@@ -1,0 +1,50 @@
+{
+  "id": "blender36",
+  "name": "Blender 3.6 LTS",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "Blender 3.6 LTS：首次启动自动下载官方运行时；无 GPU 时走 Mesa 软件渲染",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "图形应用",
+  "keywords": [
+    "blender",
+    "3d",
+    "modeling",
+    "render"
+  ],
+  "runtime": "linux-gui",
+  "preferredSize": {
+    "width": 1200,
+    "height": 820,
+    "minWidth": 800,
+    "minHeight": 560
+  },
+  "gui": {
+    "command": [
+      "blender"
+    ],
+    "screen": {
+      "width": 1600,
+      "height": 1000,
+      "depth": 24
+    },
+    "dpi": 96,
+    "fps": 30,
+    "bitrateKbps": 5000,
+    "softwareGL": true,
+    "windowManager": "auto",
+    "clipboard": true,
+    "install": {
+      "url": "https://download.blender.org/release/Blender3.6/blender-3.6.23-linux-x64.tar.xz",
+      "sha256": "0e9a18af4d0060b825e9617e24a775f759e0f9f67271c062f3d53a539030af00",
+      "dest": "blender-3.6.23",
+      "stripComponents": 1,
+      "bin": "blender",
+      "size": 260000000
+    }
+  }
+}

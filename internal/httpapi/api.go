@@ -15,16 +15,19 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"qxssh/internal/config"
+	"qxssh/internal/gui"
 	"qxssh/internal/logging"
 	"qxssh/internal/proxy"
 	"qxssh/internal/sshpool"
 	"qxssh/internal/tunnel"
+	"qxssh/internal/wallpaper"
 	"qxssh/internal/webui"
 )
 
@@ -92,6 +95,17 @@ type Gateway struct {
 
 	elevMu   sync.Mutex
 	elevInfo map[string]elevCacheEntry
+
+	// wall 是壁纸库（配置目录下的 wallpapers/）。它不经 localfs/* 访问：
+	// 那条通道对配置目录整体拒绝，而壁纸必须落在用户自己的配置目录里，
+	// 所以由 wallpapers/* 端点与文件能力令牌专管。
+	wall *wallpaper.Store
+	// wallTok 是壁纸文件端点的能力令牌：内存态、每次启动重新生成。
+	wallTok string
+
+	// guiMgr 管理 Linux 图形应用会话（runtime=linux-gui）：独立 X 显示、
+	// 画面编码流与输入注入通道都由它负责。
+	guiMgr *gui.Manager
 }
 
 func newGateway(store *config.Store, mgr *sshpool.Pool, tunnels *tunnel.Registry, wp *proxy.Registry, version, configDir string, log *logging.Logger) (*Gateway, error) {
@@ -115,6 +129,8 @@ func newGateway(store *config.Store, mgr *sshpool.Pool, tunnels *tunnel.Registry
 	a.sftpClients = map[string]*sftpShared{}
 	a.appFileToks = map[string]string{}
 	a.elevInfo = map[string]elevCacheEntry{}
+	a.wall = wallpaper.New(filepath.Join(configDir, "wallpapers"))
+	a.wallTok = randTok()
 
 	// 签名密钥是 IdP 的根基：读不出来就起不来，否则应用会拿到无法验签的令牌。
 	idpKeys, err := loadIDPKeys(configDir)
@@ -129,6 +145,7 @@ func newGateway(store *config.Store, mgr *sshpool.Pool, tunnels *tunnel.Registry
 
 	a.audit = newAuditStore(auditDir(configDir), archiveDir(configDir), store, log)
 	a.appState = loadAppState(store, log)
+	a.guiMgr = gui.NewManager(a.guiTarget, log)
 
 	nowUnix := time.Now().Unix()
 	if n, perr := store.PurgeExpiredRefresh(nowUnix); perr != nil {
@@ -173,6 +190,10 @@ func (a *Gateway) routes() http.Handler {
 	mux.HandleFunc("/api/v1/jwks", a.handleJWKS)
 
 	mux.HandleFunc("GET /api/v1/apps/file/{id}/{tok}/{path...}", a.handleServeAppFile)
+	// 壁纸库文件：单文件壁纸与交互壁纸包内的任意资源都从这里投递，
+	// 令牌段让 <video> / <iframe> 这类无法附加请求头的同源请求可直接使用。
+	mux.HandleFunc("GET /api/v1/wallpapers/file/{tok}/{name}", a.handleWallpaperFile)
+	mux.HandleFunc("GET /api/v1/wallpapers/file/{tok}/{name}/{rel...}", a.handleWallpaperFile)
 
 	mux.HandleFunc("/api/v1/{ns}", a.sysDispatch)
 	mux.HandleFunc("/api/v1/ws/{ns}/{method}", a.sysDispatch)
@@ -246,6 +267,11 @@ func (a *Gateway) routes() http.Handler {
 	a.sysWSPerm("net/tcp", "net:tcp", a.serveTcpWS)
 	a.sysPerm("POST", "net/http", "net:http", a.handleNetHTTP)
 
+	a.sysPerm("GET", "wallpapers/list", "wallpaper:read", a.handleWallpaperList)
+	a.sysNoBody("POST", "wallpapers/upload", "wallpaper:write", a.handleWallpaperUpload)
+	a.sysNoBody("POST", "wallpapers/import", "wallpaper:write", a.handleWallpaperImport)
+	a.sysPerm("POST", "wallpapers/delete", "wallpaper:write", a.handleWallpaperDelete)
+
 	a.sysPerm("GET", "apps/list", "apps:list", a.handleListUserApps)
 	a.sysPerm("POST", "apps/validate", "apps:validate", a.handleValidateApp)
 	a.sysPerm("POST", "apps/install", "apps:install", a.handleInstallApp)
@@ -255,6 +281,14 @@ func (a *Gateway) routes() http.Handler {
 	a.sysPerm("POST", "apps/link", "apps:link", a.handleLinkApp)
 
 	a.sysPerm("POST", "apps/enabled", "apps:toggle", a.handleSetAppEnabled)
+
+	// Linux 图形应用（runtime=linux-gui）：启动/停止会话、探测目标主机依赖，
+	// 以及把画面与输入桥接到浏览器的 WebSocket 通道。
+	a.sysPerm("POST", "gui/start", "gui:launch", a.handleGuiStart)
+	a.sysPerm("POST", "gui/stop", "gui:launch", a.handleGuiStop)
+	a.sysPerm("GET", "gui/list", "gui:launch", a.handleGuiList)
+	a.sysPerm("GET", "gui/deps", "gui:launch", a.handleGuiDeps)
+	a.sysWSPerm("gui/session", "gui:launch", a.serveGuiWS)
 
 	a.sysPub("GET", "perm/catalog", a.handlePermCatalog)
 	a.sysPerm("GET", "perm/granted", "perm:granted", a.handlePermGranted)
