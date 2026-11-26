@@ -1,0 +1,243 @@
+package tui
+
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+// ellipsis 是截断文本时追加的省略号，显示宽度为 1 列。
+const ellipsis = "…"
+
+// runeRange 表示一段连续的宽字符码点区间（East Asian Width 的 W / F 类）。
+type runeRange struct {
+	lo, hi rune
+}
+
+// wideRanges 按码点升序排列的宽字符区间表。
+// 覆盖 CJK 汉字、假名、谚文、全角标点、多数 emoji 与补充平面汉字。
+var wideRanges = []runeRange{
+	{0x1100, 0x115F}, // 谚文字母
+	{0x231A, 0x231B},
+	{0x2329, 0x232A},
+	{0x23E9, 0x23EC},
+	{0x23F0, 0x23F0},
+	{0x23F3, 0x23F3},
+	{0x25FD, 0x25FE},
+	{0x2614, 0x2615},
+	{0x2648, 0x2653},
+	{0x267F, 0x267F},
+	{0x2693, 0x2693},
+	{0x26A1, 0x26A1},
+	{0x26AA, 0x26AB},
+	{0x26BD, 0x26BE},
+	{0x26C4, 0x26C5},
+	{0x26CE, 0x26CE},
+	{0x26D4, 0x26D4},
+	{0x26EA, 0x26EA},
+	{0x26F2, 0x26F3},
+	{0x26F5, 0x26F5},
+	{0x26FA, 0x26FA},
+	{0x26FD, 0x26FD},
+	{0x2705, 0x2705},
+	{0x270A, 0x270B},
+	{0x2728, 0x2728},
+	{0x274C, 0x274C},
+	{0x274E, 0x274E},
+	{0x2753, 0x2755},
+	{0x2757, 0x2757},
+	{0x2795, 0x2797},
+	{0x27B0, 0x27B0},
+	{0x27BF, 0x27BF},
+	{0x2B1B, 0x2B1C},
+	{0x2B50, 0x2B50},
+	{0x2B55, 0x2B55},
+	{0x2E80, 0x2E99}, // CJK 部首
+	{0x2E9B, 0x2EF3},
+	{0x2F00, 0x2FD5}, // 康熙部首
+	{0x2FF0, 0x2FFB},
+	{0x3000, 0x303E}, // CJK 符号与标点（含全角空格）
+	{0x3041, 0x3096}, // 平假名
+	{0x3099, 0x30FF}, // 假名与片假名
+	{0x3105, 0x312F},
+	{0x3131, 0x318E},
+	{0x3190, 0x31E3},
+	{0x31F0, 0x321E},
+	{0x3220, 0x3247},
+	{0x3250, 0x4DBF}, // CJK 扩展 A
+	{0x4E00, 0xA48C}, // CJK 统一汉字与彝文
+	{0xA490, 0xA4C6},
+	{0xA960, 0xA97C},
+	{0xAC00, 0xD7A3}, // 谚文音节
+	{0xF900, 0xFAFF}, // CJK 兼容汉字
+	{0xFE10, 0xFE19},
+	{0xFE30, 0xFE52},
+	{0xFE54, 0xFE66},
+	{0xFE68, 0xFE6B},
+	{0xFF01, 0xFF60}, // 全角 ASCII
+	{0xFFE0, 0xFFE6}, // 全角符号
+	{0x16FE0, 0x16FE4},
+	{0x16FF0, 0x16FF1},
+	{0x17000, 0x187F7},
+	{0x18800, 0x18CD5},
+	{0x18D00, 0x18D08},
+	{0x1B000, 0x1B11E},
+	{0x1B150, 0x1B152},
+	{0x1B164, 0x1B167},
+	{0x1B170, 0x1B2FB},
+	{0x1F004, 0x1F004},
+	{0x1F0CF, 0x1F0CF},
+	{0x1F18E, 0x1F18E},
+	{0x1F191, 0x1F19A},
+	{0x1F200, 0x1F202},
+	{0x1F210, 0x1F23B},
+	{0x1F240, 0x1F248},
+	{0x1F250, 0x1F251},
+	{0x1F260, 0x1F265},
+	{0x1F300, 0x1F320}, // emoji 主体区间
+	{0x1F32D, 0x1F335},
+	{0x1F337, 0x1F37C},
+	{0x1F37E, 0x1F393},
+	{0x1F3A0, 0x1F3CA},
+	{0x1F3CF, 0x1F3D3},
+	{0x1F3E0, 0x1F3F0},
+	{0x1F3F4, 0x1F3F4},
+	{0x1F3F8, 0x1F43E},
+	{0x1F440, 0x1F440},
+	{0x1F442, 0x1F4FC},
+	{0x1F4FF, 0x1F53D},
+	{0x1F54B, 0x1F54E},
+	{0x1F550, 0x1F567},
+	{0x1F57A, 0x1F57A},
+	{0x1F595, 0x1F596},
+	{0x1F5A4, 0x1F5A4},
+	{0x1F5FB, 0x1F64F},
+	{0x1F680, 0x1F6C5},
+	{0x1F6CC, 0x1F6CC},
+	{0x1F6D0, 0x1F6D2},
+	{0x1F6D5, 0x1F6D7},
+	{0x1F6EB, 0x1F6EC},
+	{0x1F6F4, 0x1F6FC},
+	{0x1F7E0, 0x1F7EB},
+	{0x1F90C, 0x1F93A},
+	{0x1F93C, 0x1F945},
+	{0x1F947, 0x1F978},
+	{0x1F97A, 0x1F9CB},
+	{0x1F9CD, 0x1F9FF},
+	{0x1FA70, 0x1FA74},
+	{0x1FA78, 0x1FA7A},
+	{0x1FA80, 0x1FA86},
+	{0x1FA90, 0x1FAA8},
+	{0x1FAB0, 0x1FAB6},
+	{0x1FAC0, 0x1FAC2},
+	{0x1FAD0, 0x1FAD6},
+	{0x20000, 0x2FFFD}, // CJK 扩展 B 及以后
+	{0x30000, 0x3FFFD},
+}
+
+// runeWidth 返回字符 r 在终端中占用的显示列数。
+//
+// 规则遵循 East Asian Width：
+//   - 宽（W）与全角（F）字符占 2 列，例如汉字、假名、全角标点与多数 emoji；
+//   - 组合符号（Mn / Me）、零宽连接符与变体选择符占 0 列；
+//   - 控制字符不占显示列，同样返回 0；
+//   - 其余字符（含窄体与歧义宽度）占 1 列。
+//
+// 计算列宽时必须使用本函数而不是 rune 个数：一个汉字在等宽终端里占两列，
+// 用 len([]rune(s)) 计算会让含中文的表格整体错位。
+func runeWidth(r rune) int {
+	if r <= 0 {
+		return 0
+	}
+	if r < 0x20 || (r >= 0x7f && r < 0xa0) {
+		return 0
+	}
+	if isZeroWidthRune(r) {
+		return 0
+	}
+	if isWideRune(r) {
+		return 2
+	}
+	return 1
+}
+
+// isZeroWidthRune 报告 r 是否是不占显示列的组合符号或零宽控制符。
+func isZeroWidthRune(r rune) bool {
+	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
+		return true
+	}
+	switch {
+	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0x2060 || r == 0xFEFF:
+		return true // 零宽空格、零宽连接符与 BOM
+	case r >= 0xFE00 && r <= 0xFE0F:
+		return true // 变体选择符
+	case r >= 0x1F3FB && r <= 0x1F3FF:
+		return true // emoji 肤色修饰符
+	case r >= 0xE0100 && r <= 0xE01EF:
+		return true // 补充平面变体选择符
+	}
+	return false
+}
+
+// isWideRune 在宽字符区间表中二分查找 r。
+func isWideRune(r rune) bool {
+	lo, hi := 0, len(wideRanges)-1
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		switch {
+		case r < wideRanges[mid].lo:
+			hi = mid - 1
+		case r > wideRanges[mid].hi:
+			lo = mid + 1
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// stringWidth 返回字符串在终端中占用的显示列数（不处理 ANSI 转义序列）。
+func stringWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += runeWidth(r)
+	}
+	return w
+}
+
+// truncateWidth 把 s 按显示宽度截断到不超过 max 列，必要时在末尾补省略号。
+// 返回值的显示宽度保证不超过 max；max 小于 1 时返回空串。
+func truncateWidth(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if stringWidth(s) <= max {
+		return s
+	}
+	if max == 1 {
+		return ellipsis
+	}
+	limit := max - 1
+	w := 0
+	end := 0
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		rw := runeWidth(r)
+		if w+rw > limit {
+			break
+		}
+		w += rw
+		i += size
+		end = i
+	}
+	return s[:end] + ellipsis
+}
+
+// padWidth 用空格把 s 补足到 width 列的显示宽度；s 超宽时先按宽度截断。
+func padWidth(s string, width int) string {
+	s = truncateWidth(s, width)
+	if n := width - stringWidth(s); n > 0 {
+		return s + strings.Repeat(" ", n)
+	}
+	return s
+}

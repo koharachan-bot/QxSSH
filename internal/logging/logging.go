@@ -121,6 +121,18 @@ func (l *Logger) SetFile(path string) error {
 	return nil
 }
 
+// SetConsole 打开或关闭控制台（stdout）输出；文件输出不受影响。
+// 全屏终端界面占用控制台时关闭它，避免日志行破坏界面渲染。
+func (l *Logger) SetConsole(on bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if on {
+		l.out = os.Stdout
+	} else {
+		l.out = io.Discard
+	}
+}
+
 // Path 返回当前日志文件路径，未配置文件时为空字符串。
 func (l *Logger) Path() string {
 	l.mu.Lock()

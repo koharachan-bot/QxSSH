@@ -1,26 +1,24 @@
 // Command qxssh 启动 QxSSH —— 一个自托管的 SSH 管理控制台。
 //
-// 它解析命令行参数，做启动前的安全校验（监听非回环地址时强制要求鉴权令牌），
-// 初始化加密配置存储与日志，装配运行时并启动 HTTP 服务，最后等待退出信号做优雅关闭。
+// 它解析命令行参数，初始化加密配置存储与日志，装配与界面无关的核心运行时，
+// 再按 -web / -tui / -gui 选择界面插件启动。三个开关可以自由组合；一个都不给时
+// 默认启动 gui（当前是 web 的别名，未来换成原生桌面窗口）。
 package main
 
 import (
+	"context"
 	"crypto/tls"
-	"errors"
 	"flag"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 
 	"qxssh/internal/bootstrap"
 	"qxssh/internal/config"
+	"qxssh/internal/console"
 	"qxssh/internal/httpapi"
 	"qxssh/internal/logging"
 )
@@ -40,48 +38,40 @@ func main() {
 	os.Exit(run())
 }
 
-// isLoopbackListen 判断监听地址是否指向回环（127.0.0.0/8、::1、localhost）。
-// 空主机（如 ":8800"）视为非回环，因为它会监听所有网卡。
-func isLoopbackListen(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
+// envStr 读取字符串环境变量；未设置或为空时返回默认值。
+func envStr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
 	}
-	if host == "" {
-		return false
-	}
-	if host == "localhost" {
+	return def
+}
+
+// envBool 读取布尔环境变量，接受 1 / true / yes / on（大小写不敏感）。
+func envBool(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
 		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
 	}
 	return false
 }
 
-// openBrowser 用系统默认浏览器打开 url，按当前操作系统选择合适的外部命令。
-func openBrowser(url string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+// pluginNames 返回插件名列表，用于启动日志。
+func pluginNames(plugins []console.Plugin) string {
+	names := make([]string, 0, len(plugins))
+	for _, p := range plugins {
+		names = append(names, p.Name())
 	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go func() { _ = cmd.Wait() }()
-	return nil
+	return strings.Join(names, ",")
 }
 
 // run 是程序的真正主体，返回进程退出码（0 表示正常）。
 func run() int {
-	addr := flag.String("addr", "127.0.0.1:8800", "listen address")
-	confDir := flag.String("conf", "", "config directory (default: user config dir)")
-	open := flag.Bool("open", false, "open the console URL in the default browser on startup")
+	addr := flag.String("addr", envStr("QXSSH_ADDR", "127.0.0.1:8800"), "listen address for the -web console plugin")
+	confDir := flag.String("conf", envStr("QXSSH_CONF", ""), "config directory (default: user config dir)")
+	open := flag.Bool("open", envBool("QXSSH_OPEN"), "open the console URL in the default browser on startup (-web only)")
+	web := flag.Bool("web", envBool("QXSSH_WEB"), "run the web console plugin")
+	tui := flag.Bool("tui", envBool("QXSSH_TUI"), "run the terminal UI plugin")
+	gui := flag.Bool("gui", envBool("QXSSH_GUI"), "run the desktop GUI plugin (Windows WebView2 window)")
 	logLevel := flag.String("log-level", os.Getenv("QXSSH_LOG_LEVEL"), "log level: debug|info|warn|error|silent")
 	logFile := flag.String("log-file", os.Getenv("QXSSH_LOG_FILE"), "log file path; 'auto' = <conf>/logs/qxssh.log; empty = stdout only")
 	authToken := flag.String("auth-token", os.Getenv("QXSSH_AUTH_TOKEN"), "optional auth token for remote access; empty = no auth")
@@ -91,47 +81,40 @@ func run() int {
 	flag.Parse()
 
 	if *authToken != "" {
-		if os.Getenv("QXSSH_AUTH_TOKEN") == "" {
-			fmt.Fprintln(os.Stderr, "提示：-auth-token 会出现在进程命令行（同机进程可见），建议改用环境变量 QXSSH_AUTH_TOKEN 注入。")
-		}
 		_ = os.Setenv("QXSSH_AUTH_TOKEN", *authToken)
 	}
 
-	if *authToken == "" && !isLoopbackListen(*addr) {
-		fmt.Fprintf(os.Stderr,
-			"拒绝启动：监听地址 %q 非回环，但未配置 -auth-token（或环境变量 QXSSH_AUTH_TOKEN）。\n"+
-				"无鉴权地暴露到网络会把全部主机凭据与命令执行能力公开给任何能访问该地址的人。\n"+
-				"请配置鉴权令牌后重试，或改用回环地址（127.0.0.1）。\n", *addr)
-		return 1
+	// 界面插件先解析：只有真正要监听 HTTP 的插件才需要做 Web 安全预检。
+	plugins, err := console.Resolve(console.Select(*web, *tui, *gui))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 2
 	}
 
-	// TLS（QXS-41）：远程部署时鉴权令牌与主机凭据都不该以明文过网。
-	// 证书与私钥必须成对提供，否则视为配置错误直接拒绝启动。
-	if (*tlsCert == "") != (*tlsKey == "") {
-		fmt.Fprintln(os.Stderr, "拒绝启动：-tls-cert 与 -tls-key 必须同时提供。")
-		return 1
+	// 发布版以 Windows GUI 子系统链接：纯 gui 模式保持无控制台，双击启动不会
+	// 出现黑窗；-web / -tui 则把标准流接回父终端（没有父终端时 tui 自建控制台）。
+	console.PrepareConsole(plugins)
+
+	if *authToken != "" && console.HasConsole() {
+		fmt.Fprintln(os.Stderr, "提示：-auth-token 会出现在进程命令行（同机进程可见），建议改用环境变量 QXSSH_AUTH_TOKEN 注入。")
 	}
+
 	var tlsCfg *tls.Config
-	useTLS := *tlsCert != ""
-	if useTLS {
-		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+	if console.HasKind(plugins, console.KindWeb) {
+		tlsCfg, err = console.PrepareWeb(*addr, *tlsCert, *tlsKey, *authToken)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "加载 TLS 证书失败: %v\n", err)
+			console.ReportError(err.Error())
 			return 1
 		}
-		tlsCfg = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
-	} else if !isLoopbackListen(*addr) {
-		fmt.Fprintf(os.Stderr,
-			"警告：监听地址 %q 非回环且未启用 TLS（-tls-cert / -tls-key）。\n"+
-				"鉴权令牌、主机密码与私钥口令都会以明文经过网络；请在前面加反向代理终止 TLS，"+
-				"或直接用内置 TLS 启动。\n", *addr)
 	}
 
-	fmt.Print(banner)
+	if console.HasConsole() {
+		fmt.Print(banner)
+	}
 
 	store, err := config.Load(*confDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		console.ReportError(fmt.Sprintf("加载配置失败: %v", err))
 		return 1
 	}
 
@@ -156,70 +139,50 @@ func run() int {
 
 	if *kidRotate {
 		if err := httpapi.RotateIDPKeys(store.Dir()); err != nil {
-			fmt.Fprintf(os.Stderr, "rotate signing key: %v\n", err)
+			console.ReportError(fmt.Sprintf("rotate signing key: %v", err))
 			return 1
 		}
-		fmt.Println("签名密钥已轮换；旧公钥保留在 <conf>/keys/archive/ 仅用于验签，旧私钥已销毁。")
+		if console.HasConsole() {
+			fmt.Println("签名密钥已轮换；旧公钥保留在 <conf>/keys/archive/ 仅用于验签，旧私钥已销毁。")
+		}
 	}
 
-	srv, err := bootstrap.New(store, lg)
+	core, err := bootstrap.New(store, lg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
+		console.ReportError("初始化失败: " + err.Error())
 		return 1
 	}
 
-	ln, err := net.Listen("tcp", *addr)
-	if err != nil {
-		lg.Error("listen failed", "addr", *addr, "error", err.Error())
-		return 1
-	}
-	if useTLS {
-		ln = tls.NewListener(ln, tlsCfg)
-	}
-	scheme := "http"
-	if useTLS {
-		scheme = "https"
-	}
-
-	hostCount := len(store.ListHosts())
 	lg.Info("QxSSH started",
 		"version", bootstrap.Version,
-		"addr", scheme+"://"+ln.Addr().String(),
 		"configDir", store.Dir(),
-		"hosts", hostCount,
+		"hosts", len(store.ListHosts()),
 		"logLevel", strings.ToLower(level.String()),
+		"plugins", pluginNames(plugins),
 	)
 	if p := lg.Path(); p != "" {
 		lg.Info("log file", "path", p)
 	}
-	url := scheme + "://" + ln.Addr().String()
-	fmt.Printf("QxSSH running at %s\n", url)
-	if *open {
-		if err := openBrowser(url); err != nil {
-			lg.Warn("open browser failed", "error", err.Error())
-		}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stop()
+
+	env := console.Env{
+		Core:    core,
+		Log:     lg,
+		Options: console.Options{Addr: *addr, TLS: tlsCfg, Open: *open},
 	}
-	fmt.Println("Press Ctrl+C to stop.")
+	runErr := console.RunAll(ctx, plugins, env)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	defer signal.Stop(sigCh)
-
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- srv.Serve(ln) }()
-
-	select {
-	case sig := <-sigCh:
+	if console.HasConsole() {
 		fmt.Println("\nshutting down...")
-		lg.Info("shutting down", "signal", sig.String())
-		srv.Shutdown()
-		<-serveErr
-		return 0
-	case err := <-serveErr:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			lg.Error("serve failed", "error", err.Error())
-			return 1
-		}
-		return 0
 	}
+	lg.Info("shutting down")
+	core.Shutdown()
+	if runErr != nil {
+		lg.Error("console plugin failed", "error", runErr.Error())
+		console.ReportError(runErr.Error())
+		return 1
+	}
+	return 0
 }

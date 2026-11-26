@@ -1,17 +1,16 @@
 // Package bootstrap 负责 QxSSH 的运行时装配与生命周期管理。
 //
-// 它把配置存储、SSH 连接池、端口转发注册表、内网 Web 代理注册表和 HTTP 网关
-// 组装成一个 Runtime，注册“主机失效即停止其转发/代理”的联动钩子，并在退出时
-// 按 HTTP → 后台任务 → 转发/代理 → 连接池 → 配置库 的顺序做优雅关闭。
+// 它把配置存储、SSH 连接池、端口转发注册表、内网 Web 代理注册表和 API 网关
+// 组装成一个与界面无关的核心 Runtime，注册“主机失效即停止其转发/代理”的联动钩子，
+// 并在退出时按 后台任务 → 转发/代理 → 连接池 → 配置库 的顺序做优雅关闭。
+//
+// Runtime 不监听任何端口：HTTP 服务归 web（或 gui）界面插件，TUI 插件则直接
+// 使用 Core() 暴露的存储与连接池。这样核心层不会为了某个界面而多背一个服务器。
 package bootstrap
 
 import (
-	"context"
-	"net"
 	"net/http"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"qxssh/internal/config"
 	"qxssh/internal/httpapi"
@@ -21,25 +20,21 @@ import (
 	"qxssh/internal/tunnel"
 )
 
-// Runtime 持有 QxSSH 运行期间的全部长生命周期组件及其关闭逻辑。
+// Runtime 持有 QxSSH 运行期间的全部长生命周期核心组件及其关闭逻辑。
 type Runtime struct {
 	mgr      *sshpool.Pool
 	tunnels  *tunnel.Registry
 	proxies  *proxy.Registry
-	http     *http.Server
 	store    *config.Store
+	handler  http.Handler
 	closeAPI func()
 	log      *logging.Logger
 
 	closeOnce sync.Once
-	closed    atomic.Bool
 }
 
 // Version 是 QxSSH 的版本号，会在启动横幅与 version API 中展示。
 const Version = "1.0.0"
-
-// httpShutdownTimeout 是 HTTP 服务优雅关闭时等待在途请求完成的最长时间。
-const httpShutdownTimeout = 5 * time.Second
 
 // New 组装并返回一个 Runtime。log 为 nil 时使用默认的 info 级日志。
 // 它同时建立“SSH 连接失效 → 停止该主机上的转发与代理”的联动。
@@ -70,38 +65,28 @@ func New(store *config.Store, log *logging.Logger) (*Runtime, error) {
 		tunnels:  tunnels,
 		proxies:  wp,
 		store:    store,
+		handler:  handler,
 		closeAPI: closeAPI,
-		http: &http.Server{
-			Handler: handler,
-			// 慢速攻击防护用 ReadHeaderTimeout：不设 ReadTimeout（会截断慢速
-			// 大文件上传）、不设 WriteTimeout（会切断 WS/流式响应）（QX-064）。
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       60 * time.Second,
-			IdleTimeout:       120 * time.Second,
-			MaxHeaderBytes:    1 << 20,
-		},
-		log: log,
+		log:      log,
 	}, nil
 }
 
-// Serve 在给定监听器上提供 HTTP 服务，是阻塞调用；关闭后返回 http.ErrServerClosed。
-func (a *Runtime) Serve(ln net.Listener) error {
-	if a.closed.Load() {
-		return http.ErrServerClosed
-	}
-	return a.http.Serve(ln)
-}
+// Store 返回配置存储，供界面插件读取主机与偏好。
+func (a *Runtime) Store() *config.Store { return a.store }
 
-// Shutdown 优雅停止全部组件。它只执行一次，重复调用是安全的。
+// Pool 返回 SSH 连接池，供界面插件建立会话。
+func (a *Runtime) Pool() *sshpool.Pool { return a.mgr }
+
+// Handler 返回 API 网关的 HTTP 处理器，供 web / gui 插件监听服务。
+func (a *Runtime) Handler() http.Handler { return a.handler }
+
+// Log 返回与核心层共享的结构化日志器。
+func (a *Runtime) Log() *logging.Logger { return a.log }
+
+// Shutdown 优雅停止全部核心组件。它只执行一次，重复调用是安全的。
+// HTTP 服务已由界面插件先一步关闭，这里只负责核心资源。
 func (a *Runtime) Shutdown() {
 	a.closeOnce.Do(func() {
-		a.closed.Store(true)
-		ctx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
-		defer cancel()
-		if err := a.http.Shutdown(ctx); err != nil {
-			a.log.Warn("http graceful shutdown incomplete", "error", err.Error())
-			_ = a.http.Close()
-		}
 		a.log.Info("shutdown: stopping background exec, proxies and tunnels")
 		if a.closeAPI != nil {
 			a.closeAPI()
