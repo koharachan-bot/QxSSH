@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -149,6 +151,31 @@ func (a *Gateway) handleStoreCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, storeCatalogResp{Catalog: cat, Source: usedSrc, Warning: warn})
 }
 
+// storeHTTPClient 返回商店拉取专用客户端：系统 DNS 失败时自动回落 DoH。
+//
+// 每 5 分钟内复用同一个 Transport，保持连接池；DoH 解析结果另有缓存。
+var storeClientOnce struct {
+	sync.Once
+	c *http.Client
+}
+
+func storeHTTPClient() *http.Client {
+	storeClientOnce.Do(func() {
+		dialer := &net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}
+		tr := &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialWithDoH(dialer),
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          8,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		storeClientOnce.c = &http.Client{Transport: tr, Timeout: storeCatalogTimeout}
+	})
+	return storeClientOnce.c
+}
+
 // fetchStoreCatalog 拉取并校验索引。只接受 https（明文 http 会被中间人替换成恶意 .qxp），
 // 响应限 1MB，相对路径按索引地址补全。
 func fetchStoreCatalog(ctx context.Context, raw string) (*storeCatalog, error) {
@@ -160,7 +187,9 @@ func fetchStoreCatalog(ctx context.Context, raw string) (*storeCatalog, error) {
 		return nil, errors.New("商店索引必须是 https 地址")
 	}
 
-	client := &http.Client{Timeout: storeCatalogTimeout}
+	// 走带 DoH 兜底的客户端：系统 DNS 解析不了商店域名时自动改用 DoH，
+	// 不再把「请你自己去浏览器确认」这种活推给用户。
+	client := storeHTTPClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err

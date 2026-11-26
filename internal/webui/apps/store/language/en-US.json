@@ -134,8 +134,8 @@
   "app.store.market-newer": "New version",
   "app.store.market-pick-version": "Choose a version to install",
   "app.store.market-version-hint": "Switch version ({v1} total)",
-  "app.store.market-loading-hint": "This usually takes a few seconds. If it hangs, this machine likely cannot reach the store address.",
-  "app.store.market-loading-slow": "Waited {v1}s, still waiting for the store. It will fail with a reason after 18s.",
+  "app.store.market-loading-hint": "Usually a few seconds; DNS failures automatically fall back to DoH.",
+  "app.store.market-loading-slow": "Waited {v1}s (DoH fallback kicks in when system DNS fails). It will fail with a full list of attempts after 18s.",
   "app.store.err-catalog-timeout": "Timed out after 18s while fetching the store catalog.",
-  "app.store.err-catalog-advice": "Check in order: (1) open https://cos.meowhead.cn/index.json in a browser on this machine; (2) check proxy or firewall; (3) press Retry. If it still fails, appdata/logs/ has the exact status for /api/v1/store/catalog."
+  "app.store.err-catalog-advice": "Already tried: system DNS, DoH fallback (Alibaba / Tencent / Cloudflare), and alternate store sources. A persistent failure usually means this machine's egress to that domain is blocked by a proxy or firewall. Retry first; check proxy settings only if it keeps failing."
 }
