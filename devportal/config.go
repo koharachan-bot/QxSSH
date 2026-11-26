@@ -47,6 +47,10 @@ type Config struct {
 	MailFromName string
 	// RequireEmailVerify 强制新注册账号完成邮箱验证后才能登录。
 	RequireEmailVerify bool
+	// 品牌信息：挑战页与页头展示的名称、Logo、站点域名。
+	Brand     string
+	BrandLogo string
+	SiteURL   string
 }
 
 func envStr(key, def string) string {
@@ -79,6 +83,10 @@ func LoadConfig() (*Config, error) {
 		SMTPPass:     envStr("PORTAL_SMTP_PASS", ""),
 		MailFrom:     envStr("PORTAL_MAIL_FROM", ""),
 		MailFromName: envStr("PORTAL_MAIL_FROM_NAME", "QxSSH 开发者平台"),
+
+		Brand:     envStr("PORTAL_BRAND", "QxSSH"),
+		BrandLogo: envStr("PORTAL_BRAND_LOGO", ""),
+		SiteURL:   strings.TrimRight(envStr("PORTAL_SITE_URL", ""), "/"),
 	}
 	if c.Registration != "open" && c.Registration != "closed" {
 		return nil, errors.New("PORTAL_REGISTRATION 只能是 open 或 closed")

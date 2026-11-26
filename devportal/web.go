@@ -43,6 +43,11 @@ type pageData struct {
 	Flash   string
 	Error   string
 	Data    any
+
+	// 品牌信息由 render 统一注入，模板里可直接用。
+	Brand     string
+	BrandLogo string
+	SiteURL   string
 }
 
 func newServer(cfg *Config, st *Store, cos *COS) (*Server, error) {
@@ -93,13 +98,14 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
 	mux.HandleFunc("GET /{$}", s.handleHome)
-	mux.HandleFunc("GET /login", s.handleLoginPage)
-	mux.HandleFunc("POST /login", s.handleLogin)
-	mux.HandleFunc("GET /register", s.handleRegisterPage)
+	// 原地拦截：未通过人机验证时，同一 URL 返回挑战页，验证后自动回到原地址。
+	mux.HandleFunc("GET /login", s.humanGate(s.handleLoginPage))
+	mux.HandleFunc("POST /login", s.humanGate(s.handleLogin))
+	mux.HandleFunc("GET /register", s.humanGate(s.handleRegisterPage))
+	mux.HandleFunc("POST /register", s.humanGate(s.handleRegister))
 	mux.HandleFunc("GET /verify", s.handleVerifyPage)
 	mux.HandleFunc("GET /challenge", s.handleChallengeIssue)
 	mux.HandleFunc("POST /challenge/verify", s.handleChallengeSubmit)
-	mux.HandleFunc("POST /register", s.handleRegister)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("GET /verify-email", s.handleVerifyEmailPage)
 	mux.HandleFunc("POST /verify-email", s.handleVerifyEmailSubmit)
@@ -153,6 +159,9 @@ func (s *Server) logf(format string, args ...any) {
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data pageData) {
 	data.User = s.userOf(r)
 	data.IsAdmin = data.User != nil && data.User.Role == "admin"
+	data.Brand = s.Cfg.Brand
+	data.BrandLogo = s.Cfg.BrandLogo
+	data.SiteURL = s.Cfg.SiteURL
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tpl.ExecuteTemplate(w, name, data); err != nil {
 		fmt.Fprintf(w, "渲染页面失败：%v", err)

@@ -139,3 +139,37 @@ code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:.88em}
 .codes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
 .codes code{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;text-align:center;letter-spacing:.5px}
 details summary{cursor:pointer}
+
+/* 原地拦截式挑战页（对齐 CF managed challenge 的观感） */
+.cf-wrap{display:flex;align-items:center;justify-content:center;min-height:70vh;padding:24px}
+.cf-card{
+  width:100%;max-width:440px;text-align:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:28px 26px 22px;
+}
+.cf-brand{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--brand);font-weight:700;font-size:13px;letter-spacing:.5px;margin-bottom:18px}
+.cf-brand svg{width:20px;height:20px}
+.cf-title{margin:0 0 8px;font-size:19px;font-weight:600}
+.cf-sub{margin:0 0 18px;color:var(--muted);font-size:13px;line-height:1.6}
+.cf-progress{height:3px;border-radius:999px;background:var(--panel2);margin:0 0 10px;overflow:hidden}
+.cf-progress i{display:block;height:100%;width:35%;border-radius:999px;background:var(--brand);transition:width .4s ease,background .3s}
+.cf-progress i[data-kind="ok"]{background:var(--ok)}
+.cf-status{margin:0 0 16px;font-size:12.5px;color:var(--brand);min-height:18px}
+.cf-status[data-kind="ok"]{color:var(--ok)}
+.cf-status[data-kind="err"]{color:var(--err)}
+.cf-stage{
+  height:84px;border-radius:12px;cursor:crosshair;
+  border:1px dashed var(--line);background:var(--panel2);
+  display:grid;place-items:center;color:var(--muted);font-size:12px;
+  transition:border-color .2s;
+}
+.cf-stage:hover{border-color:var(--brand)}
+.cf-stage span{pointer-events:none;user-select:none}
+.cf-retry{margin-top:14px}
+.cf-noscript{margin-top:14px;color:var(--err);font-size:13px}
+.cf-foot{margin:16px 0 0;font-size:11.5px;color:var(--muted)}
+
+/* 品牌 Logo */
+.brand-logo{width:22px;height:22px;border-radius:6px;object-fit:cover;margin-right:7px}
+.cf-logo{width:22px;height:22px;border-radius:6px;object-fit:cover}
+.cf-brand span{font-size:13px}

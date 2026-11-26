@@ -1,0 +1,28 @@
+{{template "header" .}}
+<section class="cf-wrap" data-chal-target="{{.Data}}">
+  <div class="cf-card">
+    <div class="cf-brand">
+      {{if .BrandLogo}}
+      <img class="cf-logo" src="{{.BrandLogo}}" alt="{{.Brand}}" referrerpolicy="no-referrer">
+      {{else}}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2l8 3v7c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5z"/><path d="M9 12l2 2 4-4"/>
+      </svg>
+      {{end}}
+      <span>{{.Brand}}</span>
+    </div>
+    <h1 class="cf-title">正在验证您是否是真人</h1>
+    <p class="cf-sub">这一步用来阻挡自动化滥用，通常只需一秒，无需操作。</p>
+    <div class="cf-progress"><i data-chal-progress></i></div>
+    <p class="cf-status" data-chal-status data-kind="busy">正在校验浏览器…</p>
+    <div class="cf-stage" data-chal-stage><span>在此区域内移动鼠标可加快验证</span></div>
+    <button class="btn-ghost cf-retry" type="button" data-chal-retry hidden>重试验证</button>
+    <noscript><p class="cf-noscript">请启用 JavaScript 与 Cookie 后继续访问。</p></noscript>
+    <p class="cf-foot">
+      验证通过后将自动返回原页面。
+      {{if .SiteURL}}<br><a href="{{.SiteURL}}" rel="noreferrer">{{.SiteURL}}</a>{{end}}
+    </p>
+  </div>
+</section>
+<script src="/static/challenge.js"></script>
+{{template "footer" .}}

@@ -97,12 +97,15 @@ func (s *Server) handleChallengeSubmit(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
-// requireHuman 检查通行 Cookie；未通过时引导到挑战页。
+// requireHuman 保留给非中间件路径的兜底检查。
+//
+// 主流程已经由 humanGate 中间件原地拦截，能走到这里的请求必然已通过验证；
+// 这里再校验一次是为了防止将来有人直接挂 handler 时漏掉防护。
 func (s *Server) requireHuman(w http.ResponseWriter, r *http.Request, next string) bool {
 	if validPass(s.Cfg, clientIP(r), r.UserAgent(), readPassCookie(r)) {
 		return true
 	}
-	http.Redirect(w, r, "/verify?next="+next, http.StatusSeeOther)
+	s.renderChallenge(w, r)
 	return false
 }
 

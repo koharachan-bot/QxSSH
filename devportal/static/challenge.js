@@ -16,8 +16,9 @@
   var barEl = document.querySelector('[data-chal-bar]');
   var stageEl = document.querySelector('[data-chal-stage]');
   var retryBtn = document.querySelector('[data-chal-retry]');
-  var nextHost = document.querySelector('[data-next]');
-  var nextUrl = (nextHost && nextHost.getAttribute('data-next')) || '/dashboard';
+  // 回跳目标来自服务端渲染的挑战页；原地拦截模式下它就是用户原本要访问的地址。
+  var nextHost = document.querySelector('[data-chal-target]') || document.querySelector('[data-next]');
+  var nextUrl = (nextHost && (nextHost.getAttribute('data-chal-target') || nextHost.getAttribute('data-next'))) || '/';
   // 只接受站内相对路径，和服务端的校验保持一致，避免开放重定向。
   if (nextUrl.charAt(0) !== '/' || nextUrl.indexOf('//') === 0) nextUrl = '/dashboard';
 
@@ -187,7 +188,7 @@
     }).then(function (out) {
       if (!out.ok) throw new Error((out.body && out.body.error) || '验证未通过');
       finished = true;
-      setStatus('验证通过，正在跳转…', 'ok');
+      setStatus('验证成功。正在等待页面响应…', 'ok');
       var bar = document.querySelector('[data-chal-progress]');
       if (bar) bar.style.width = '100%';
       setTimeout(function () { location.replace(nextUrl); }, 260);
