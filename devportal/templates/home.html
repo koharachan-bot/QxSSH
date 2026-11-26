@@ -1,0 +1,15 @@
+{{template "header" .}}
+<section class="hero">
+  <h1>把应用提交到 QxSSH 应用商店</h1>
+  <p>把打包好的 <code>.qxp</code> 上传到这里，审核通过后即可上架，所有 QxSSH 用户都能在应用管理器里一键安装。</p>
+  <div class="hero-actions">
+    <a class="btn" href="/register">注册开发者账号</a>
+    <a class="btn-ghost" href="/login">已有账号登录</a>
+  </div>
+</section>
+<section class="grid3">
+  <div class="card"><h3>1. 上传安装包</h3><p>平台会自动校验 <code>manifest.json</code>、入口文件与包内路径，不通过的包不会进入审核队列。</p></div>
+  <div class="card"><h3>2. 等待审核</h3><p>管理员确认应用信息与权限声明，必要时会填写驳回理由，你修改后可重新提交。</p></div>
+  <div class="card"><h3>3. 上架商店</h3><p>通过后一键上架，平台把包推到对象存储并重写商店索引，客户端立刻可见。</p></div>
+</section>
+{{template "footer" .}}

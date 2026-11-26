@@ -1,0 +1,47 @@
+{{template "header" .}}
+{{with .Data}}
+<div class="page-head">
+  <h2>{{.Name}} <span class="muted mono">{{.AppID}}</span></h2>
+  <span class="badge s-{{.Status}}">{{status .Status}}</span>
+</div>
+{{if eq .Status "rejected"}}{{if .ReviewNote}}
+<div class="flash err">驳回理由：{{.ReviewNote}}</div>
+{{end}}{{end}}
+<section class="card">
+  <h3>安装包</h3>
+  {{if .PackagePath}}
+  <dl class="kv">
+    <dt>版本</dt><dd class="mono">{{.Version}}</dd>
+    <dt>大小</dt><dd class="mono">{{size .PackageSize}}</dd>
+    <dt>SHA-256</dt><dd class="mono small">{{.PackageSHA}}</dd>
+  </dl>
+  {{else}}
+  <p class="muted">尚未上传安装包。</p>
+  {{end}}
+  <form method="post" action="/apps/{{.ID}}/upload" enctype="multipart/form-data" class="form">
+    <label>选择 .qxp 文件<input type="file" name="package" accept=".qxp" required></label>
+    <button class="btn" type="submit">{{if .PackagePath}}重新上传{{else}}上传安装包{{end}}</button>
+  </form>
+  <p class="muted small">上传时平台会校验：zip 结构、manifest.json、id 与平台登记一致、入口文件存在、不含系统内置声明。</p>
+</section>
+<section class="card">
+  <h3>提交审核</h3>
+  {{if eq .Status "published"}}
+  <p class="muted">该应用已上架。</p>
+  {{else}}
+  <form method="post" action="/apps/{{.ID}}/submit">
+    <button class="btn" type="submit" {{if not .PackagePath}}disabled{{end}}>提交审核</button>
+    {{if not .PackagePath}}<span class="muted small">上传安装包后才能提交</span>{{end}}
+  </form>
+  {{end}}
+</section>
+{{if or (eq .Status "draft") (eq .Status "rejected")}}
+<section class="card danger">
+  <h3>删除应用</h3>
+  <form method="post" action="/apps/{{.ID}}/delete">
+    <button class="btn-danger" type="submit">删除</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+{{template "footer" .}}

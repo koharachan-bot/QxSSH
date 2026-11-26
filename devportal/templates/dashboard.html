@@ -1,0 +1,45 @@
+{{template "header" .}}
+{{with .Data}}
+<div class="page-head">
+  <h2>我的应用</h2>
+  <div class="stats">
+    <span class="pill">已上架 {{.Published}}</span>
+    <span class="pill">待审核 {{.Pending}}</span>
+    <span class="pill warn">已驳回 {{.Rejected}}</span>
+  </div>
+</div>
+<section class="card">
+  <h3>新建应用</h3>
+  <form method="post" action="/apps" class="form grid2">
+    <label>应用 id<input name="app_id" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}" placeholder="例如 wechat"></label>
+    <label>应用名称<input name="name" required maxlength="60" placeholder="例如 微信"></label>
+    <label>简介<input name="summary" maxlength="200" placeholder="一句话说明这个应用"></label>
+    <label>分类<input name="category" maxlength="30" placeholder="例如 工具"></label>
+    <p class="span2 muted">应用 id 必须与安装包内 <code>manifest.json</code> 的 <code>id</code> 完全一致，创建后不可修改。</p>
+    <button class="btn span2" type="submit">创建并继续</button>
+  </form>
+</section>
+<section class="card">
+  <h3>应用列表</h3>
+  {{if .Apps}}
+  <table class="table">
+    <thead><tr><th>应用</th><th>版本</th><th>大小</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
+    <tbody>
+    {{range .Apps}}
+      <tr>
+        <td><a href="/apps/{{.ID}}">{{.Name}}</a><div class="muted mono">{{.AppID}}</div></td>
+        <td class="mono">{{if .Version}}{{.Version}}{{else}}-{{end}}</td>
+        <td class="mono">{{if .PackageSize}}{{size .PackageSize}}{{else}}-{{end}}</td>
+        <td><span class="badge s-{{.Status}}">{{status .Status}}</span></td>
+        <td class="muted">{{age .UpdatedAt}}</td>
+        <td><a class="link" href="/apps/{{.ID}}">管理</a></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">还没有应用，先在上面的表单里创建一个。</p>
+  {{end}}
+</section>
+{{end}}
+{{template "footer" .}}

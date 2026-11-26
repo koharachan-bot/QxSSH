@@ -1,0 +1,33 @@
+{{define "header"}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · QxSSH 开发者平台</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">QxSSH<span>开发者平台</span></a>
+  <nav class="nav">
+    {{if .User}}
+      <a href="/dashboard">我的应用</a>
+      {{if .IsAdmin}}<a href="/admin">审核与上架</a>{{end}}
+      <form method="post" action="/logout" class="inline"><button class="link" type="submit">退出</button></form>
+    {{else}}
+      <a href="/login">登录</a>
+      <a href="/register" class="btn-ghost">注册</a>
+    {{end}}
+  </nav>
+</header>
+<main class="wrap">
+  {{if .Flash}}<div class="flash ok">{{.Flash}}</div>{{end}}
+  {{if .Error}}<div class="flash err">{{.Error}}</div>{{end}}
+{{end}}
+
+{{define "footer"}}
+</main>
+<footer class="foot">QxSSH 开发者平台 · 提交、审核与上架应用</footer>
+</body>
+</html>
+{{end}}
