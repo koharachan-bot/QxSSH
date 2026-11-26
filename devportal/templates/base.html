@@ -3,15 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · {{.Brand}} 开发者平台</title>
+<title>{{.Title}} · QxSSH 开发者平台</title>
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/static/favicon.ico">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">
-    {{if .BrandLogo}}<img class="brand-logo" src="{{.BrandLogo}}" alt="" referrerpolicy="no-referrer">{{end}}
-    {{.Brand}}<span>开发者平台</span>
-  </a>
+  <a class="brand" href="/">QxSSH<span>开发者平台</span></a>
   <nav class="nav">
     {{if .User}}
       <a href="/dashboard">我的应用</a>
@@ -31,7 +30,7 @@
 
 {{define "footer"}}
 </main>
-<footer class="foot">{{.Brand}} 开发者平台 · 提交、审核与上架应用</footer>
+<footer class="foot">QxSSH 开发者平台 · 提交、审核与上架应用</footer>
 </body>
 </html>
 {{end}}

@@ -1,0 +1,29 @@
+{{define "turnstile"}}
+<div class="ts-widget" data-chal-widget data-state="running">
+  <div class="ts-left">
+    <div class="ts-spinner" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <div class="ts-check" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 6.6"/></svg>
+    </div>
+    <div class="ts-error" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 7v7"/><circle cx="12" cy="17.5" r="1"/><circle cx="12" cy="12" r="9"/></svg>
+    </div>
+    <span class="ts-text" data-chal-text>正在验证...</span>
+  </div>
+  <div class="ts-right">
+    <div class="ts-brand">
+      {{if .BrandLogo}}
+      <img class="ts-logo" src="{{.BrandLogo}}" alt="" referrerpolicy="no-referrer">
+      {{end}}
+      <span class="ts-name">{{.Brand}}</span>
+    </div>
+    <div class="ts-links">
+      {{if .SiteURL}}<a href="{{.SiteURL}}/privacy" target="_blank" rel="noreferrer noopener">隐私</a>{{else}}<span>隐私</span>{{end}}
+      <span class="ts-dot">·</span>
+      {{if .SiteURL}}<a href="{{.SiteURL}}" target="_blank" rel="noreferrer noopener">帮助</a>{{else}}<span>帮助</span>{{end}}
+    </div>
+  </div>
+</div>
+{{end}}

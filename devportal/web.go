@@ -99,9 +99,10 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /{$}", s.handleHome)
 	// 原地拦截：未通过人机验证时，同一 URL 返回挑战页，验证后自动回到原地址。
-	mux.HandleFunc("GET /login", s.humanGate(s.handleLoginPage))
+	// GET 页面正常渲染（页内挂件自动完成验证），只有提交动作被人机门禁保护。
+	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.humanGate(s.handleLogin))
-	mux.HandleFunc("GET /register", s.humanGate(s.handleRegisterPage))
+	mux.HandleFunc("GET /register", s.handleRegisterPage)
 	mux.HandleFunc("POST /register", s.humanGate(s.handleRegister))
 	mux.HandleFunc("GET /verify", s.handleVerifyPage)
 	mux.HandleFunc("GET /challenge", s.handleChallengeIssue)

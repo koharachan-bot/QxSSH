@@ -32,13 +32,16 @@ const (
 	chalDifficulty = 4
 	chalPassCookie = "qxportal_pass"
 
-	// 证据阈值。
-	chalMinPointerPoints = 10
-	chalMinPathLength    = 220.0 // 归一化坐标系下累计移动距离
-	chalMinDuration      = 1200   // 毫秒
+	// 证据阈值。真实用户填表时鼠标必然经过输入框与按钮，取一个"自然会满足"的下限，
+	// 避免把正常用户挡在外面。
+	chalMinPointerPoints = 6
+	chalMinPathLength    = 120.0
+	chalMinDuration      = 1000 // 毫秒
 	// 路径长度 / 首尾直线距离：数学意义上的完美直线比值为 1.000，
 	// 只可能来自程序生成的轨迹；真人鼠标哪怕快速直拖也会因亚像素抖动 >1.01。
 	chalMinCurvature = 1.004
+	// 纯键盘操作的用户没有指针轨迹，用按键次数作为替代证据。
+	chalMinKeyEvents = 3
 )
 
 type chalState struct {
@@ -119,13 +122,25 @@ type chalEvidence struct {
 	Signals    map[string]any `json:"signals"`
 }
 
-// errEvidence 描述证据为何不达标（直接返回给前端，便于用户重试）。
+// checkEvidence 校验行为证据。
+//
+// 与"必须移动鼠标"相比这里取更贴近 Turnstile 的策略：正常浏览器的用户**无需操作**
+// 即可通过（只看时长与 PoW），指针轨迹作为加分项；一旦信号里出现自动化特征
+// （navigator.webdriver 为真，Playwright/Puppeteer 默认开启），就要求补齐轨迹证据。
+// 这样真人不会被莫名要求"动一下鼠标"，而拿无头浏览器裸跑会卡在证据上。
 func checkEvidence(ev chalEvidence) error {
 	if ev.DurationMs < chalMinDuration {
 		return fmt.Errorf("交互过快，请重试")
 	}
+	if isAutomated(ev.Signals) {
+		if len(ev.Points) < chalMinPointerPoints && ev.KeyEvents < chalMinKeyEvents {
+			return fmt.Errorf("检测到自动化环境且缺少交互证据，请使用普通浏览器访问")
+		}
+	}
+	// 非自动化环境到此即可：Turnstile 同样不会因为用户没动鼠标就拒绝。
+	// 有轨迹时再做一次"是否像程序生成"的检查，纯粹作为提高门槛的附加项。
 	if len(ev.Points) < chalMinPointerPoints {
-		return fmt.Errorf("未检测到指针移动，请移动鼠标后重试")
+		return nil
 	}
 	// 累计路径长度与非直线性：真实指针轨迹既不是零长度，也不会是一条完美直线。
 	var path float64
@@ -147,6 +162,19 @@ func checkEvidence(ev chalEvidence) error {
 		return fmt.Errorf("指针轨迹过于平直，请正常移动鼠标后重试")
 	}
 	return nil
+}
+
+// isAutomated 判断信号里是否带有常见的自动化浏览器特征。
+func isAutomated(signals map[string]any) bool {
+	if signals == nil {
+		return false
+	}
+	if v, ok := signals["webdriver"]; ok {
+		if b, isBool := v.(bool); isBool && b {
+			return true
+		}
+	}
+	return false
 }
 
 // verifySolution 校验 PoW 解答。
