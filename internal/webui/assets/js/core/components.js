@@ -1162,8 +1162,16 @@ export function MenuPanel(props) {
     cancelHide();
     menuHideTimer = setTimeout(() => {
       menuHideTimer = null;
+      // 到点后先确认鼠标是否仍在菜单或子菜单内。
+      // 只按时间判断会误关：鼠标从父项横向移向子菜单途中会短暂经过其他项，
+      // 那些项触发 scheduleHide，定时器到点时鼠标其实已经停在子菜单里，
+      // 结果子菜单闪一下就消失，根本点不到。
+      const menuEl = document.querySelector('.qx-menu');
+      if (menuEl && menuEl.matches(':hover')) return;
+      const subEl = document.querySelector('.qx-submenu');
+      if (subEl && subEl.matches(':hover')) return;
       closeSub();
-    }, 180);
+    }, 350);
   };
 
   const place = (el) => {

@@ -22,6 +22,12 @@ const (
 	auditMetaSettings = "audit_settings"
 
 	auditCurrentFile = "audit.log"
+
+	// auditRotatingSuffix 是归档期间当前代的临时改名后缀。
+	auditRotatingSuffix = ".rotating"
+
+	// auditRotateBackoffSeconds 是归档失败后的退避秒数，避免持续重试刷日志。
+	auditRotateBackoffSeconds = 60
 )
 
 type auditStore struct {
@@ -36,7 +42,9 @@ type auditStore struct {
 	buf     *ring.Ring
 	seq     uint64
 	sizes   map[string]int64
-	queueMu sync.RWMutex // 保护 queue/sysQueue 的发送与关闭
+	// archiveFailAt 记录每个分组最近一次归档失败的 Unix 秒，用于退避。
+	archiveFailAt map[string]int64
+	queueMu       sync.RWMutex // 保护 queue/sysQueue 的发送与关闭
 
 	verbose atomic.Bool
 
@@ -63,8 +71,9 @@ func newAuditStore(curDir, arcDir string, se *config.Store, lg *logging.Logger) 
 		log:      lg,
 		path:     curDir,
 		buf:      ring.New(auditRingCap),
-		sizes:    map[string]int64{},
-		set:      defaultAuditSettings(),
+		sizes:         map[string]int64{},
+		archiveFailAt: map[string]int64{},
+		set:           defaultAuditSettings(),
 		queue:    make(chan auditEntry, auditQueue),
 		sysQueue: make(chan auditEntry, auditSysQueue),
 		cmdCh:    make(chan auditControl),
@@ -467,11 +476,39 @@ func (s *auditStore) openGroup(g string) *os.File {
 
 func (s *auditStore) rotate(g string) {
 	set := s.settings()
+	now := time.Now().Unix()
+
+	// 归档失败后进入退避窗口。Windows 上当前代可能仍被写入句柄占用，
+	// 若不退避，每来一条日志就会重新归档一次同一份内容并刷一条 WARN。
 	s.wmu.Lock()
+	if last, ok := s.archiveFailAt[g]; ok && now-last < auditRotateBackoffSeconds {
+		s.wmu.Unlock()
+		return
+	}
 	n := s.sizes[g]
-	s.sizes[g] = 0
 	s.wmu.Unlock()
+
+	// 统计值不在这里清零：只有归档真正成功才重置，否则继续累积，
+	// 避免「清零后删除失败 → 立刻再次超限 → 无限重复归档」。
 	res := s.archiveGroup(g, set)
+	if res.Err != "" {
+		s.wmu.Lock()
+		s.archiveFailAt[g] = now
+		s.wmu.Unlock()
+		s.recordSystem(auditEntry{
+			HostID: hostIDOfGroup(g), Target: "rotate",
+			Detail: fmt.Sprintf("工作区 %s 的审计日志归档未完成：%s", g, res.Err),
+		})
+		return
+	}
+	s.wmu.Lock()
+	if s.sizes[g] >= n {
+		s.sizes[g] -= n
+	} else {
+		s.sizes[g] = 0
+	}
+	delete(s.archiveFailAt, g)
+	s.wmu.Unlock()
 
 	verb := "已脱敏归档"
 	if set.RotateMode == auditRotateDelete {
@@ -493,27 +530,43 @@ func (s *auditStore) archiveGroup(g string, set auditSettings) auditResult {
 		return auditResult{}
 	}
 	before := fi.Size()
+
+	// 先把当前代改名独占，再基于改名后的文件归档。
+	//
+	// 这样有两个好处：改名成功即证明已无其他句柄占用（Windows 上手握句柄时
+	// 改名会失败），后续读写删都是我们独占；改名失败则直接退避，不会出现
+	// 「归档文件写了但当前代删不掉 → 下一秒再归档一份同样内容」的重复堆积。
+	work := cur + auditRotatingSuffix
+	if err := os.Rename(cur, work); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return auditResult{Err: "当前代仍被占用，稍后重试"}
+	}
+
 	if set.RotateMode == auditRotateDelete {
-		if err := os.Remove(cur); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return auditResult{Err: "丢弃失败，当前代已保留"}
+		if err := os.Remove(work); err != nil && !errors.Is(err, os.ErrNotExist) {
+			_ = os.Rename(work, cur)
+			return auditResult{Err: "丢弃失败，当前代已还原"}
 		}
 		return auditResult{Freed: before, Groups: []string{g}}
 	}
 
-	entries := s.readEntries(cur)
+	entries := s.readEntries(work)
 	if len(entries) == 0 {
-
-		return auditResult{Err: "当前代无法解析（密钥可能已更换），已保留原文件"}
+		_ = os.Rename(work, cur)
+		return auditResult{Err: "当前代无法解析（密钥可能已更换），已还原原文件"}
 	}
 	zipBytes, _ := buildAuditArchive(entries, g, time.Now())
 	if zipBytes == nil {
-		return auditResult{Err: "归档生成失败，当前代已保留"}
+		_ = os.Rename(work, cur)
+		return auditResult{Err: "归档生成失败，已还原原文件"}
 	}
 	if _, err := s.writeArchiveFile(s.groupArcDir(g), zipBytes); err != nil {
-		return auditResult{Err: "归档写入失败，当前代已保留"}
+		_ = os.Rename(work, cur)
+		return auditResult{Err: "归档写入失败，已还原原文件"}
 	}
-	if err := os.Remove(cur); err != nil && !errors.Is(err, os.ErrNotExist) {
-		s.log.Warn("audit remove current after archive failed", "path", cur, "error", err.Error())
+	if err := os.Remove(work); err != nil && !errors.Is(err, os.ErrNotExist) {
+		// 已独占改名后仍删不掉属于异常情况：还原，交由退避处理。
+		_ = os.Rename(work, cur)
+		return auditResult{Err: "归档已写入但当前代删除失败，已还原"}
 	}
 	return auditResult{Freed: before - int64(len(zipBytes)), Rows: len(entries),
 		Archived: int64(len(zipBytes)), Groups: []string{g}}
