@@ -3,7 +3,10 @@
  * 要点：带会话令牌与权限补授的请求封装（sysFetch/sysGet/sysCall/sysPut/sysStream），以及 sudo 提权交互。
  */
 import { dom } from './dom.js';
-import { bridge, onInit, onSessionChange, requestAppPermission as bridgeGrantRequest } from '../app-bridge.js';
+import {
+  bridge, onInit, onSessionChange, requestSession,
+  requestAppPermission as bridgeGrantRequest,
+} from '../app-bridge.js';
 import { drainText } from './read-stream.js';
 import { t, tf } from './i18n.js';
 
@@ -103,6 +106,12 @@ export async function sysFetch(verb, target, { query, body, form, blob, raw, _re
       let granted = false;
       try { granted = await bridgeGrantRequest(err.need); } catch { }
       if (granted) return sysFetch(verb, target, { query, body, form, blob, raw, _retried: true });
+    }
+    // 401：令牌可能已被吊销或世代过期。应用侧主动重新握手后重试一次，
+    // 否则商店这类依赖自身令牌的应用会一直卡在 401 上无法自愈。
+    if (err.status === 401 && bridge && bridge.session !== undefined && !_retried) {
+      const tok = await requestSession();
+      if (tok) return sysFetch(verb, target, { query, body, form, blob, raw, _retried: true });
     }
     throw err;
   }

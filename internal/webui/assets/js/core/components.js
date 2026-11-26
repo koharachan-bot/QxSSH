@@ -1139,27 +1139,31 @@ export function listRow(children, {
 }
 
 /** 菜单面板视图，由 menu 弹出时使用 */
+/** 菜单隐藏定时器（模块级：同一时刻仅一个菜单实例） */
+let menuHideTimer = null;
+
 export function MenuPanel(props) {
   const { items, x = 0, y = 0, onClose = null, cls = '', zIndex = null } = props;
-  // 子菜单：children 非空的菜单项在悬停/点击时展开二级面板。
-  // 二级面板绝对定位在父菜单内（.menu 已是 position:absolute），让 DOM 上的
-  // 包含关系保持成立——点击子项时外层的“点外面关闭”判定才不会误关。
-  const [sub, setSub] = useState(null);
-  let hideTimer = null;
+  // 子菜单不能用 useState：MenuPanel 通过 island() 独立挂载，不在 createView 的
+  // 组件树里，拿不到 hooks 上下文，调用 useState 会直接抛错并让整个菜单渲染失败，
+  // 表现就是右键菜单完全弹不出来。这里改成命令式挂载，用 island 自己管理子面板。
+  let subClose = null;
 
   const cancelHide = () => {
-    if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+    if (menuHideTimer !== null) {
+      clearTimeout(menuHideTimer);
+      menuHideTimer = null;
+    }
+  };
+  const closeSub = () => {
+    if (subClose) { try { subClose(); } catch { } subClose = null; }
   };
   const scheduleHide = () => {
     cancelHide();
-    hideTimer = setTimeout(() => { hideTimer = null; setSub(null); }, 180);
-  };
-  const openSub = (el, kids) => {
-    cancelHide();
-    const menuEl = el.closest ? el.closest('.menu') : null;
-    const mr = menuEl ? menuEl.getBoundingClientRect() : { top: 0, right: 0 };
-    const r = el.getBoundingClientRect();
-    setSub({ top: r.top - mr.top, flip: mr.right + 200 > window.innerWidth, items: kids });
+    menuHideTimer = setTimeout(() => {
+      menuHideTimer = null;
+      closeSub();
+    }, 180);
   };
 
   const place = (el) => {
@@ -1199,29 +1203,41 @@ export function MenuPanel(props) {
     }, it.hint ? h('span', { class: 'menu-item-hint mono', text: it.hint }) : null);
   };
 
-  const nodes = items.map((it, i) => renderItem(it, i));
-  if (sub) {
-    nodes.push(h('div', {
-      key: 'submenu',
+  /** 打开二级菜单：island 渲染后直接挂进父菜单，保持 DOM 包含关系 */
+  const openSub = (itemEl, kids) => {
+    cancelHide();
+    const menuEl = itemEl.closest ? itemEl.closest('.menu') : null;
+    if (!menuEl) return;
+    const mr = menuEl.getBoundingClientRect();
+    const r = itemEl.getBoundingClientRect();
+    const flip = mr.right + 200 > window.innerWidth;
+    const top = Math.round(r.top - mr.top);
+
+    closeSub();
+    const panel = island(() => h('div', {
       class: 'menu qx-submenu',
       style: {
         position: 'absolute',
-        top: `${sub.top}px`,
-        left: sub.flip ? 'auto' : 'calc(100% - 4px)',
-        right: sub.flip ? 'calc(100% - 4px)' : 'auto',
+        top: `${top}px`,
+        left: flip ? 'auto' : 'calc(100% - 4px)',
+        right: flip ? 'calc(100% - 4px)' : 'auto',
         zIndex: '1',
       },
       onMouseenter: () => cancelHide(),
       onMouseleave: () => scheduleHide(),
-    }, sub.items.map((it, i) => renderItem(it, i))));
-  }
+    }, kids.map((it, i) => renderItem(it, i))));
+    if (panel && panel.el) {
+      menuEl.appendChild(panel.el);
+      subClose = () => { panel.close(); panel.el?.remove(); };
+    }
+  };
 
   return h('div', {
     class: cx('menu', 'qx-menu', cls),
     style: { left: `${x}px`, top: `${y}px`, zIndex: zIndex == null ? null : String(zIndex) },
     ref: place,
     onMouseleave: () => scheduleHide(),
-  }, nodes);
+  }, items.map((it, i) => renderItem(it, i)));
 }
 
 /** 弹出上下文菜单，返回可关闭的句柄 */

@@ -776,3 +776,26 @@ function frameHandshakeKey() {
 }
 
 post('ready', { k: frameHandshakeKey() });
+
+/**
+ * 请求宿主重新签发会话令牌。
+ *
+ * 令牌可能因为应用世代递增（权限变更、整体撤销）或 jti 吊销而失效，
+ * 此时应用侧只剩一个空令牌。调用本函数让宿主重新 mint 并通过 session 消息下发。
+ * 返回的 Promise 在收到新令牌（或超时）后 resolve。
+ */
+export function requestSession(timeout = 3000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (tok) => {
+      if (done) return;
+      done = true;
+      sessionListeners.delete(listener);
+      resolve(tok || null);
+    };
+    const listener = (tok) => { if (tok) finish(tok); };
+    sessionListeners.add(listener);
+    setTimeout(() => finish(state.session), timeout);
+    post('session-request', { k: frameHandshakeKey() });
+  });
+}

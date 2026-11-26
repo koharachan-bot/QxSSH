@@ -626,6 +626,17 @@ function onMessage(e) {
       markFrameReady(entry);
       sendInit(entry);
       break;
+    case 'session-request':
+      // 应用主动请求重新握手：令牌可能因世代递增或 jti 吊销而失效，
+      // 若不提供这条通道，应用会拿着废令牌反复撞 401 而无法自愈。
+      if (d.k !== entry.frameKey) break;
+      if (!entry.ctx.appId) break;
+      mintSession(entry.ctx.appId, Array.from(entry.sessionScopes || [])).then((tok) => {
+        if (!tok) return;
+        entry.token = tok;
+        post(entry.iframe, { type: 'session', token: tok });
+      }).catch(() => { });
+      break;
     case 'app-error': {
       const msg = String(d.message || '').trim();
       if (!msg) break;

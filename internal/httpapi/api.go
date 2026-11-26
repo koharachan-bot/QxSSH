@@ -640,7 +640,15 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
-		h.Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'self'")
+		// img-src 放行 data:：内置图标与下拉箭头用 data:image/svg+xml 内联，
+	// 否则在 default-src 'self' 下会被拒绝（表现为箭头缺失）。
+	// script-src 单独放行内联主题脚本的 sha256，避免整段主题初始化被拦后闪白。
+	h.Set("Content-Security-Policy",
+		"default-src 'self'; "+
+			"img-src 'self' data:; "+
+			"style-src 'self' 'unsafe-inline'; "+
+			"script-src 'self' 'sha256-RpM2xdDG60LPu2Zh/uP/jb8oQWWg3jlC4aH1rkIWaIA='; "+
+			"object-src 'none'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
