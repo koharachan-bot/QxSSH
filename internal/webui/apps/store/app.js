@@ -20,6 +20,7 @@ import {
 import { createAppShell } from '/assets/js/core/app-shell.js';
 import {
   listUserApps, validateApp, installApp, uninstallApp, setAppEnabled, auditNote, linkApp, getGitBranches, setAppFileTokens,
+  storeCatalog,
 } from '/assets/js/core/qxssh-api.js';
 import { appIcon } from '/assets/js/icons/index.js';
 import { setIconHidden, hiddenIconIds } from '/assets/js/desktop/iconvis.js';
@@ -33,6 +34,10 @@ const SCOPES = [
 ];
 
 const INSTALL = { id: 'install', key: 'app.store.action-install', icon: 'cloud-download' };
+
+// 商店目录是宿主拉取并缓存的远程索引（默认 app.meowhead.cn），
+// 与「已安装应用」是两类数据，因此单独作为侧栏作用域，不参与 matches/分类筛选。
+const MARKET = { id: 'market', key: 'app.store.tab-market', icon: 'shopping-bag' };
 
 const isBuiltin = (a) => a.systemApp === true || a.source === 'builtin';
 
@@ -68,6 +73,13 @@ function boot(el) {
   const gitMsg = signal('');
   const gitDetecting = signal(false);
   const gitBranches = signal([]);
+
+  // 商店目录：catalog 为 null 表示还没拉过；catalogWarn 是回退到旧缓存时的提示。
+  const catalog = signal(null);
+  const catalogBusy = signal(false);
+  const catalogErr = signal('');
+  const catalogWarn = signal('');
+  const marketBusy = signal('');
   const gitDefaultBranch = signal('');
   const gitSelectedBranch = signal('');
   const gitCustomBranch = signal(false);
@@ -132,6 +144,23 @@ function boot(el) {
     }
     return [...count.entries()].sort((x, y) => y[1] - x[1]
       || categoryName(x[0]).localeCompare(categoryName(y[0]), lang()));
+  }
+
+  /** 拉取商店目录（宿主侧 5 分钟缓存，force 时由宿主自行判断是否需要回源） */
+  async function loadCatalog(force = false) {
+    if (catalog.value && !force) return;
+    catalogBusy.next = true;
+    catalogErr.next = '';
+    try {
+      const r = await storeCatalog();
+      catalog.next(r && r.catalog ? r.catalog : null);
+      catalogWarn.next((r && r.warning) || '');
+      if (!catalog.value) catalogErr.next(t('app.store.err-catalog-empty'));
+    } catch (e) {
+      catalogErr.next((e && e.message) || String(e));
+    } finally {
+      catalogBusy.next = false;
+    }
   }
 
   async function loadApps(force = false) {
@@ -741,7 +770,8 @@ function boot(el) {
     }
     scope.next = id;
     category.next = '';
-    if (id === INSTALL.id) query.next = '';
+    if (id === INSTALL.id || id === MARKET.id) query.next = '';
+    if (id === MARKET.id) void loadCatalog();
   }
 
   function sideTree() {
@@ -757,9 +787,11 @@ function boot(el) {
       id: s.id, label: t(s.key), icon: s.icon, count: counts.get(s.id) || 0,
     }));
     scopeItems.unshift({ id: INSTALL.id, label: t(INSTALL.key), icon: INSTALL.icon });
+    // 商店排在安装之上：开箱即可发现可装的应用。
+    scopeItems.unshift({ id: MARKET.id, label: t(MARKET.key), icon: MARKET.icon });
 
     const blocks = [{ title: t('app.store.sidebar-scope'), items: scopeItems }];
-    if (scope.value !== INSTALL.id) {
+    if (scope.value !== INSTALL.id && scope.value !== MARKET.id) {
       const cats = categoriesOf();
       blocks.push({
         title: t('app.store.field-category'),
@@ -812,6 +844,119 @@ function boot(el) {
     return h('div', { class: 'am-list' }, sorted.map(appRow));
   }
 
+  /** 商店条目的图标：远程 URL 用 img，缺省时退回内置图标 */
+  function marketIcon(a) {
+    if (a.icon) {
+      return h('div', { class: 'am-ic' }, [
+        h('img', { src: a.icon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+      ]);
+    }
+    return h('div', { class: 'am-ic' }, [
+      h('span', { class: 'qicon', html: appIcon(a.id, 'qicon') }),
+    ]);
+  }
+
+  /** 该商店条目是否已经装在本机（按 id 比对） */
+  function installedOf(id) {
+    return apps.value.find((x) => String(x.id) === String(id)) || null;
+  }
+
+  async function installFromMarket(a) {
+    if (marketBusy.value) return;
+    marketBusy.next = a.id;
+    try {
+      await doInstall({
+        validate: () => validateApp({ url: a.file }),
+        run: (consent) => installApp({ url: a.file }, consent),
+        busy: marketBusy,
+        msg: { next: () => {} },
+      });
+    } finally {
+      marketBusy.next = '';
+    }
+  }
+
+  function marketRow(a) {
+    const has = installedOf(a.id);
+    const busy = marketBusy.value === a.id;
+    const actions = h('div', { class: 'am-actions' }, [
+      has
+        ? badge(t('app.store.market-installed'), 'success')
+        : h('button', {
+          class: 'btn btn-primary btn-sm',
+          text: busy ? t('app.store.market-installing') : t('app.store.market-install'),
+          disabled: busy,
+          onClick: () => { void installFromMarket(a); },
+        }),
+    ]);
+    return h('div', { key: a.id, class: 'am-row' }, [
+      marketIcon(a),
+      h('div', { class: 'am-info' }, [
+        h('div', { class: 'am-name-row' }, [
+          h('span', { class: 'am-name', text: a.name || a.id }),
+          a.version ? h('span', { class: 'am-ver mono', text: 'v' + a.version }) : null,
+          a.category ? h('span', { class: 'am-cat', text: a.category }) : null,
+          a.runtime === 'linux-gui' ? badge('GUI', 'primary') : null,
+        ]),
+        h('div', { class: 'am-desc', text: a.description || t('app.store.desc-missing-market') }),
+      ]),
+      actions,
+    ]);
+  }
+
+  function marketBody() {
+    if (catalogBusy.value && !catalog.value) {
+      return h('div', { class: 'am-state' }, [
+        h('div', { class: 'am-state-title', text: t('app.store.market-loading') }),
+      ]);
+    }
+    if (catalogErr.value && !catalog.value) {
+      return h('div', { class: 'am-state' }, [
+        h('div', { class: 'am-state-title', text: t('app.store.err-catalog-failed') }),
+        h('div', { class: 'am-state-desc', text: catalogErr.value }),
+        h('button', {
+          class: 'btn btn-outline btn-sm', text: t('app.store.action-retry'),
+          onClick: () => { void loadCatalog(true); },
+        }),
+      ]);
+    }
+    const cat = catalog.value;
+    const list = (cat && Array.isArray(cat.apps) ? cat.apps : []);
+    const q = query.value.trim().toLowerCase();
+    const shown = q
+      ? list.filter((a) => [a.name, a.description, a.category, a.author, a.id]
+        .some((v) => String(v || '').toLowerCase().includes(q)))
+      : list;
+    if (!shown.length) {
+      return emptyState(q ? t('app.store.empty-no-match') : t('app.store.market-empty'));
+    }
+    return h('div', { class: 'am-list' }, shown.map(marketRow));
+  }
+
+  function marketTree() {
+    const cat = catalog.value;
+    const warn = catalogWarn.value;
+    return h('div', { class: 'am-main' }, [
+      h('div', { class: 'am-toolbar' }, [
+        h('div', { class: 'am-head' }, [
+          h('div', { class: 'am-head-title', text: (cat && cat.name) || t('app.store.tab-market') }),
+          h('div', { class: 'am-head-sub', text: tf('app.store.market-count', { v1: (cat && cat.apps ? cat.apps.length : 0) }) }),
+        ]),
+        h('span', { class: 'qx-grow' }),
+        h('button', {
+          class: 'btn btn-outline btn-sm',
+          text: t('app.store.action-refresh'),
+          disabled: catalogBusy.value,
+          onClick: () => { void loadCatalog(true); },
+        }),
+        searchBox(t('app.store.search-placeholder'), (v) => onSearch(v), { cls: 'am-search' }),
+      ]),
+      h('div', { class: 'am-scroll' }, h('div', { class: 'am-body' }, [
+        warn ? h('div', { class: 'am-market-warn', text: warn }) : null,
+        marketBody(),
+      ])),
+    ]);
+  }
   function listTree() {
     const cat = category.value;
     const cur = SCOPES.find((s) => s.id === scope.value);
@@ -833,7 +978,12 @@ function boot(el) {
   }
 
   function mainTree() {
-    return scope.value === INSTALL.id ? installTree() : listTree();
+    if (scope.value === INSTALL.id) return installTree();
+    if (scope.value === MARKET.id) {
+      void loadCatalog();
+      return marketTree();
+    }
+    return listTree();
   }
 
   const sideBox = document.createElement('div');

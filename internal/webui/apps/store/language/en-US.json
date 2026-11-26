@@ -118,5 +118,16 @@
   "app.store.git-branch-detecting-tip": "Detecting branches…",
   "app.store.git-branch-detecting-msg": "Detecting branches…",
   "app.store.git-branches-default-hint": "Default: {v1}",
-  "app.store.git-branches-detected-full": "{v1} branches (default: {v2})"
+  "app.store.git-branches-detected-full": "{v1} branches (default: {v2})",
+  "app.store.tab-market": "Store",
+  "app.store.market-loading": "Fetching the store catalog…",
+  "app.store.market-empty": "No apps published in the store yet",
+  "app.store.market-count": "{v1} available",
+  "app.store.market-install": "Install",
+  "app.store.market-installing": "Installing…",
+  "app.store.market-installed": "Installed",
+  "app.store.action-refresh": "Refresh",
+  "app.store.err-catalog-failed": "Failed to fetch the store catalog",
+  "app.store.err-catalog-empty": "The store catalog is empty",
+  "app.store.desc-missing-market": "No description"
 }

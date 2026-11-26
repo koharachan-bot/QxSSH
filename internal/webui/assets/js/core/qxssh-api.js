@@ -600,3 +600,8 @@ export function guiDeps(host) {
 export function guiWsUrl(id, codec) {
   return sysWsUrl('gui/session', { id, codec });
 }
+
+/** 取应用商店目录（宿主缓存 5 分钟；返回 { catalog, source, cached?, warning? }） */
+export function storeCatalog() {
+  return sysGet('store/catalog');
+}

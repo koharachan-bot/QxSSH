@@ -106,6 +106,12 @@ type Gateway struct {
 	// guiMgr 管理 Linux 图形应用会话（runtime=linux-gui）：独立 X 显示、
 	// 画面编码流与输入注入通道都由它负责。
 	guiMgr *gui.Manager
+
+	// 商店目录的进程内缓存：默认源 5 分钟内不重复回源。
+	storeCatMu  sync.Mutex
+	storeCat    *storeCatalog
+	storeCatAt  time.Time
+	storeCatSrc string
 }
 
 func newGateway(store *config.Store, mgr *sshpool.Pool, tunnels *tunnel.Registry, wp *proxy.Registry, version, configDir string, log *logging.Logger) (*Gateway, error) {
@@ -292,6 +298,8 @@ func (a *Gateway) routes() http.Handler {
 
 	a.sysPub("GET", "perm/catalog", a.handlePermCatalog)
 	a.sysPerm("GET", "perm/granted", "perm:granted", a.handlePermGranted)
+	a.sysPerm("GET", "store/catalog", "apps:list", a.handleStoreCatalog)
+
 	a.sysPerm("GET", "perm/grants", "perm:read", a.handlePermGrants)
 	a.sysPerm("POST", "perm/grant", "perm:grant", a.handlePermGrant)
 	a.sysPerm("POST", "perm/revoke", "perm:revoke", a.handlePermRevoke)

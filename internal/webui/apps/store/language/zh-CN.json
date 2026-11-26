@@ -118,5 +118,16 @@
   "app.store.git-branch-detecting-tip": "检测分支…",
   "app.store.git-branch-detecting-msg": "检测分支中…",
   "app.store.git-branches-default-hint": "默认: {v1}",
-  "app.store.git-branches-detected-full": "{v1} 个分支 (默认: {v2})"
+  "app.store.git-branches-detected-full": "{v1} 个分支 (默认: {v2})",
+  "app.store.tab-market": "商店",
+  "app.store.market-loading": "正在拉取商店目录…",
+  "app.store.market-empty": "商店里还没有上架的应用",
+  "app.store.market-count": "共 {v1} 款可安装",
+  "app.store.market-install": "安装",
+  "app.store.market-installing": "安装中…",
+  "app.store.market-installed": "已安装",
+  "app.store.action-refresh": "刷新",
+  "app.store.err-catalog-failed": "商店目录拉取失败",
+  "app.store.err-catalog-empty": "商店目录为空",
+  "app.store.desc-missing-market": "暂无简介"
 }

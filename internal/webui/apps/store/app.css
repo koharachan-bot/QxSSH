@@ -176,3 +176,14 @@
   .am-search { max-width: none; }
   .am-actions .qx-ibtn { opacity: 1; }
 }
+
+/* 商店条目：图标来自远程索引，统一裁成圆角方块，避免不同尺寸撑破行高 */
+.am-ic img { width: 34px; height: 34px; border-radius: calc(var(--radius) * 0.5); object-fit: contain; }
+
+.am-market-warn {
+  margin: 0 0 10px; padding: 9px 12px; border-radius: calc(var(--radius) * 0.5);
+  font-size: 0.78rem; line-height: 1.5;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--warning) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
+}
