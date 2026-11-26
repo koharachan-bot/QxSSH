@@ -8,6 +8,7 @@ import { h } from '/assets/js/core/vdom.js';
 import { bootApp } from '/assets/js/app-bridge.js';
 import { signal } from '/assets/js/core/signal.js';
 import { getState } from '/assets/js/core/store.js';
+import { toast } from '/assets/js/core/ui.js';
 import { createAppShell } from '/assets/js/core/app-shell.js';
 import {
   alertBar, sidebarSections, statusBar, sideAction, segmented,
@@ -163,6 +164,25 @@ function boot(el, ctx) {
     refreshStatus();
   }
 
+  const installing = signal(false);
+
+  /** 一键安装 kubectl：安装完成后重新探测环境 */
+  async function doInstall() {
+    if (installing.value) return;
+    installing.next = true;
+    toast(t('app.k8s.install-start'), 'info');
+    try {
+      const r = await api.installKubectl(hostId);
+      if (r.ok) toast(t('app.k8s.install-ok'), 'success');
+      else if (/QX_NO_DOWNLOADER/.test((r.err || '') + (r.out || ''))) toast(t('app.k8s.install-no-downloader'), 'error');
+      else if (/QX_UNSUPPORTED_ARCH/.test((r.err || '') + (r.out || ''))) toast(t('app.k8s.install-bad-arch'), 'error');
+      else toast((r.err || t('app.k8s.install-failed')).slice(0, 300), 'error');
+    } finally {
+      installing.next = false;
+    }
+    await fetchEnv();
+  }
+
   const contentHost = document.createElement('div');
   contentHost.className = 'qx-main';
 
@@ -205,7 +225,19 @@ function boot(el, ctx) {
     lang();
     const e = env.value;
     const banner = (e && !e.installed)
-      ? h('div', { class: 'k8s-top-alert' }, [alertBar('error', t('app.k8s.not-installed'), t('app.k8s.not-installed-tip'))])
+      ? h('div', { class: 'k8s-top-alert' }, [
+          alertBar('error', t('app.k8s.not-installed'), t('app.k8s.not-installed-tip'), {
+            actions: [
+              h('button', {
+                class: 'btn btn-sm btn-primary',
+                type: 'button',
+                disabled: installing.value,
+                text: installing.value ? t('app.k8s.install-running') : t('app.k8s.install-now'),
+                onClick: () => doInstall(),
+              }),
+            ],
+          }),
+        ])
       : (e && !e.reachable)
         ? h('div', { class: 'k8s-top-alert' }, [alertBar('error', t('app.k8s.unreachable'), e.error || '')])
         : null;

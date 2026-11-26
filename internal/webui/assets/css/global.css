@@ -216,6 +216,8 @@ input[type="checkbox"] + label { user-select: none; }
 .alert-error .alert-ic { color: var(--destructive); }
 .alert-title { font-weight: 600; }
 .alert-desc { color: var(--muted-foreground); display: block; margin-top: 1px; }
+.alert-body { flex: 1 1 auto; min-width: 0; line-height: 1.5; }
+.alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
 
 #messages {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -266,6 +268,9 @@ input[type="checkbox"] + label { user-select: none; }
 .menu-item.danger { color: var(--destructive); }
 .menu-item.danger:hover { background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); }
 .menu-item.active { background: var(--row-active); color: var(--primary); font-weight: 500; }
+.menu-item.has-sub { padding-right: 8px; }
+.menu-arrow { margin-left: auto; opacity: .55; flex: none; }
+.qx-submenu { min-width: 150px; }
 .menu-sep { height: 1px; margin: 5px 4px; background: var(--hairline); }
 .menu-head { padding: 6px 10px 4px; font-size: 0.72rem; color: var(--glass-text-tertiary); }
 

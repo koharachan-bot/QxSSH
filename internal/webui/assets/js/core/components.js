@@ -1027,14 +1027,16 @@ export function statusBar(bits, { cls = '' } = {}) {
   }));
 }
 
-/** 提示横幅：info/success/error 等风格 */
-export function alertBar(kind, title, desc = '', { cls = '' } = {}) {
+/** 提示横幅：info/success/error 等风格；actions 为可选的追加操作按钮 */
+export function alertBar(kind, title, desc = '', { cls = '', actions = null } = {}) {
   const ic = kind === 'error' ? 'warning' : (kind === 'success' ? 'check' : 'info');
+  const hasActions = Array.isArray(actions) && actions.length > 0;
   return h('div', { class: cx('alert', `alert-${kind}`, cls) }, [
     h('span', { class: 'alert-ic', html: icon(ic, 'qicon qicon-sm') }),
-    h('span', null, [
+    h('div', { class: 'alert-body' }, [
       title ? h('span', { class: 'alert-title', text: title }) : null,
       desc ? h('span', { class: 'alert-desc', text: desc }) : null,
+      hasActions ? h('div', { class: 'alert-actions' }, actions) : null,
     ].filter(Boolean)),
   ]);
 }
@@ -1139,6 +1141,27 @@ export function listRow(children, {
 /** 菜单面板视图，由 menu 弹出时使用 */
 export function MenuPanel(props) {
   const { items, x = 0, y = 0, onClose = null, cls = '', zIndex = null } = props;
+  // 子菜单：children 非空的菜单项在悬停/点击时展开二级面板。
+  // 二级面板绝对定位在父菜单内（.menu 已是 position:absolute），让 DOM 上的
+  // 包含关系保持成立——点击子项时外层的“点外面关闭”判定才不会误关。
+  const [sub, setSub] = useState(null);
+  let hideTimer = null;
+
+  const cancelHide = () => {
+    if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+  };
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimer = setTimeout(() => { hideTimer = null; setSub(null); }, 180);
+  };
+  const openSub = (el, kids) => {
+    cancelHide();
+    const menuEl = el.closest ? el.closest('.menu') : null;
+    const mr = menuEl ? menuEl.getBoundingClientRect() : { top: 0, right: 0 };
+    const r = el.getBoundingClientRect();
+    setSub({ top: r.top - mr.top, flip: mr.right + 200 > window.innerWidth, items: kids });
+  };
+
   const place = (el) => {
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -1150,22 +1173,55 @@ export function MenuPanel(props) {
     el.style.left = `${Math.max(m, left)}px`;
     el.style.top = `${Math.max(m, top)}px`;
   };
+
+  const renderItem = (it, i) => {
+    if (it.sep) return h('hr', { key: `s${i}`, class: 'divider' });
+    if (it.head) return h('div', { key: `h${i}`, class: 'menu-head', text: it.head });
+    const kids = Array.isArray(it.children) ? it.children.filter(Boolean) : [];
+    const hasKids = kids.length > 0;
+    return h('button', {
+      key: `i${i}`,
+      class: cx('menu-item', it.danger && 'danger', it.active && 'active', hasKids && 'has-sub'),
+      type: 'button',
+      html: `${it.icon ? icon(it.icon, 'qicon qicon-sm') : ''}<span>${esc(it.label ?? '')}</span>`
+        + (hasKids ? icon('chevron-right', 'qicon qicon-sm menu-arrow') : ''),
+      disabled: !!it.disabled,
+      onMouseenter: (e) => {
+        cancelHide();
+        if (!hasKids) { scheduleHide(); return; }
+        openSub(e.currentTarget, kids);
+      },
+      onClick: (e) => {
+        if (hasKids) { openSub(e.currentTarget, kids); return; }
+        onClose?.();
+        it.onClick?.();
+      },
+    }, it.hint ? h('span', { class: 'menu-item-hint mono', text: it.hint }) : null);
+  };
+
+  const nodes = items.map((it, i) => renderItem(it, i));
+  if (sub) {
+    nodes.push(h('div', {
+      key: 'submenu',
+      class: 'menu qx-submenu',
+      style: {
+        position: 'absolute',
+        top: `${sub.top}px`,
+        left: sub.flip ? 'auto' : 'calc(100% - 4px)',
+        right: sub.flip ? 'calc(100% - 4px)' : 'auto',
+        zIndex: '1',
+      },
+      onMouseenter: () => cancelHide(),
+      onMouseleave: () => scheduleHide(),
+    }, sub.items.map((it, i) => renderItem(it, i))));
+  }
+
   return h('div', {
     class: cx('menu', 'qx-menu', cls),
     style: { left: `${x}px`, top: `${y}px`, zIndex: zIndex == null ? null : String(zIndex) },
     ref: place,
-  }, items.map((it, i) => {
-    if (it.sep) return h('hr', { key: `s${i}`, class: 'divider' });
-    if (it.head) return h('div', { key: `h${i}`, class: 'menu-head', text: it.head });
-    return h('button', {
-      key: `i${i}`,
-      class: cx('menu-item', it.danger && 'danger', it.active && 'active'),
-      type: 'button',
-      html: `${it.icon ? icon(it.icon, 'qicon qicon-sm') : ''}<span>${esc(it.label ?? '')}</span>`,
-      disabled: !!it.disabled,
-      onClick: () => { onClose?.(); it.onClick?.(); },
-    }, it.hint ? h('span', { class: 'menu-item-hint mono', text: it.hint }) : null);
-  }));
+    onMouseleave: () => scheduleHide(),
+  }, nodes);
 }
 
 /** 弹出上下文菜单，返回可关闭的句柄 */

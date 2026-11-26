@@ -8,6 +8,7 @@ import { h } from '/assets/js/core/vdom.js';
 import { bootApp } from '/assets/js/app-bridge.js';
 import { signal } from '/assets/js/core/signal.js';
 import { getState } from '/assets/js/core/store.js';
+import { toast } from '/assets/js/core/ui.js';
 import { createAppShell } from '/assets/js/core/app-shell.js';
 import {
   alertBar, sidebarSections, statusBar, sideAction, segmented,
@@ -198,6 +199,24 @@ function boot(el, ctx) {
     } catch (e) { /* 预取失败不影响主流程 */ }
   }
 
+  const installing = signal(false);
+
+  /** 一键安装 Docker Engine：安装完成后重新探测环境 */
+  async function doInstall() {
+    if (installing.value) return;
+    installing.next = true;
+    toast(t('app.docker.install-start'), 'info');
+    try {
+      const r = await api.installDocker(hostId);
+      if (r.ok) toast(t('app.docker.install-ok'), 'success');
+      else if (/QX_NO_PKG_MANAGER/.test((r.err || '') + (r.out || ''))) toast(t('app.docker.install-no-pkg'), 'error');
+      else toast((r.err || t('app.docker.install-failed')).slice(0, 300), 'error');
+    } finally {
+      installing.next = false;
+    }
+    await fetchEnv();
+  }
+
   const contentHost = document.createElement('div');
   contentHost.className = 'qx-main';
 
@@ -243,7 +262,19 @@ function boot(el, ctx) {
     const e = env.value;
     const err = envErr.value;
     const banner = (err || (e && !e.installed))
-      ? h('div', { class: 'dk-top-alert' }, [alertBar('error', t('app.docker.not-installed'), err || (e && e.raw) || '')])
+      ? h('div', { class: 'dk-top-alert' }, [
+          alertBar('error', t('app.docker.not-installed'), err || (e && e.raw) || t('app.docker.not-installed-tip'), {
+            actions: [
+              h('button', {
+                class: 'btn btn-sm btn-primary',
+                type: 'button',
+                disabled: installing.value,
+                text: installing.value ? t('app.docker.install-running') : t('app.docker.install-now'),
+                onClick: () => doInstall(),
+              }),
+            ],
+          }),
+        ])
       : null;
 
     return h('div', { class: 'app-root dk-root' }, [

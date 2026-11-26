@@ -153,6 +153,45 @@ export async function detect(host) {
 }
 
 /** docker info 全量（含镜像加速站配置） */
+/**
+ * 一键安装 Docker Engine：按目标机的包管理器选择安装方式。
+ * 安装需要 root，先申请 sudo；命令整体以 `sh -lc` 下发（argv 逐项转义，无注入风险）。
+ * 宿主单次执行上限 300 秒，apt 索引较慢时可能超时，此时提示用户重试或手动安装。
+ */
+export async function installDocker(host) {
+  const res = await requestSudoElevation(host, {
+    title: t('app.docker.name'),
+    reason: t('app.docker.need-sudo'),
+  });
+  if (!res || !res.ok) {
+    return { ok: false, out: '', err: (res && res.error) || t('app.docker.need-sudo'), exit: 1 };
+  }
+  elevHosts.add(host);
+  const script = [
+    'set -e',
+    'if command -v apt-get >/dev/null 2>&1; then',
+    '  export DEBIAN_FRONTEND=noninteractive',
+    '  apt-get update -y',
+    '  apt-get install -y docker.io',
+    '  systemctl enable --now docker >/dev/null 2>&1 || true',
+    'elif command -v dnf >/dev/null 2>&1; then',
+    '  dnf install -y docker',
+    '  systemctl enable --now docker >/dev/null 2>&1 || true',
+    'elif command -v yum >/dev/null 2>&1; then',
+    '  yum install -y docker',
+    '  systemctl enable --now docker >/dev/null 2>&1 || true',
+    'elif command -v pacman >/dev/null 2>&1; then',
+    '  pacman -S --noconfirm docker',
+    '  systemctl enable --now docker >/dev/null 2>&1 || true',
+    'else',
+    '  echo QX_NO_PKG_MANAGER',
+    '  exit 9',
+    'fi',
+    'command -v docker',
+  ].join('\n');
+  return run(host, ['sh', '-lc', script], { timeout: 300, elevated: true });
+}
+
 export async function daemonInfo(host) {
   const r = await run(host, ['docker', 'info', '--format', '{{json .}}'], { timeout: 40 });
   if (!r.ok) throw new Error(r.err || r.out || 'docker info failed');

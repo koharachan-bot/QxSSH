@@ -61,6 +61,43 @@ async function runRoot(host, argv, opts) {
  * ------------------------------------------------------------------ */
 
 /** 探测 kubectl 与集群连通性 */
+/**
+ * 一键安装 kubectl：按 CPU 架构从官方 release 下载到 /usr/local/bin。
+ * 需要 root（先申请 sudo）；无 curl/wget 时给出明确标记，前端据此提示手动安装。
+ */
+export async function installKubectl(host) {
+  const res = await requestSudoElevation(host, {
+    title: t('app.k8s.name'),
+    reason: t('app.k8s.need-sudo'),
+  });
+  if (!res || !res.ok) {
+    return { ok: false, out: '', err: (res && res.error) || t('app.k8s.need-sudo'), exit: 1 };
+  }
+  elevHosts.add(host);
+  const script = [
+    'set -e',
+    'ARCH=$(uname -m)',
+    'case "$ARCH" in',
+    '  x86_64|amd64) A=amd64 ;;',
+    '  aarch64|arm64) A=arm64 ;;',
+    '  *) echo "QX_UNSUPPORTED_ARCH $ARCH"; exit 8 ;;',
+    'esac',
+    'if command -v curl >/dev/null 2>&1; then',
+    '  V=$(curl -fsSL https://dl.k8s.io/release/stable.txt | tr -d "\r\n")',
+    '  curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$V/bin/linux/$A/kubectl"',
+    'elif command -v wget >/dev/null 2>&1; then',
+    '  V=$(wget -qO- https://dl.k8s.io/release/stable.txt | tr -d "\r\n")',
+    '  wget -qO /usr/local/bin/kubectl "https://dl.k8s.io/release/$V/bin/linux/$A/kubectl"',
+    'else',
+    '  echo QX_NO_DOWNLOADER',
+    '  exit 7',
+    'fi',
+    'chmod 0755 /usr/local/bin/kubectl',
+    '/usr/local/bin/kubectl version --client',
+  ].join('\n');
+  return run(host, ['sh', '-lc', script], { timeout: 300, elevated: true });
+}
+
 export async function detect(host) {
   const script = [
     'command -v kubectl >/dev/null 2>&1 && kubectl version --client -o json 2>/dev/null | head -c 400 || echo NO_KUBECTL',
