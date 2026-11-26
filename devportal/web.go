@@ -100,6 +100,18 @@ func (s *Server) Routes() http.Handler {
 	staticFS, _ := fs.Sub(assets, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
+	// 面向脚本/CI 的 JSON API：用 API Key 认证，不走浏览器会话与 CSRF。
+	mux.HandleFunc("GET /api/v1/me", s.handleAPIMe)
+	mux.HandleFunc("GET /api/v1/apps", s.handleAPIListApps)
+	mux.HandleFunc("POST /api/v1/apps", s.handleAPICreateApp)
+	mux.HandleFunc("POST /api/v1/apps/{id}/upload", s.handleAPIUpload)
+	mux.HandleFunc("POST /api/v1/apps/{id}/submit", s.handleAPISubmit)
+	mux.HandleFunc("POST /api/v1/apps/{id}/publish", s.handleAPIPublish)
+	mux.HandleFunc("POST /api/v1/apps/{id}/reject", s.handleAPIReject)
+	mux.HandleFunc("GET /api/v1/catalog", s.handleAPICatalog)
+	mux.HandleFunc("POST /api/v1/catalog/rebuild", s.handleAPIRebuild)
+	mux.HandleFunc("POST /api/v1/apps/{id}/status", s.handleAPISetStatus)
+
 	mux.HandleFunc("GET /{$}", s.handleHome)
 	// 原地拦截：未通过人机验证时，同一 URL 返回挑战页，验证后自动回到原地址。
 	// GET 页面正常渲染（页内挂件自动完成验证），只有提交动作被人机门禁保护。
@@ -119,6 +131,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /login/2fa", s.handleTOTPVerify)
 
 	mux.HandleFunc("GET /account", s.requireLogin(s.handleAccount))
+	mux.HandleFunc("POST /account/apikeys", s.requireLogin(s.handleCreateAPIKey))
+	mux.HandleFunc("POST /account/apikeys/revoke", s.requireLogin(s.handleRevokeAPIKey))
 	mux.HandleFunc("GET /account/2fa/setup", s.requireLogin(s.handleTOTPSetup))
 	mux.HandleFunc("POST /account/2fa/enable", s.requireLogin(s.handleTOTPEnable))
 	mux.HandleFunc("POST /account/2fa/disable", s.requireLogin(s.handleTOTPDisable))

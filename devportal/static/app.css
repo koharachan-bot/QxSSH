@@ -244,3 +244,12 @@ details summary{cursor:pointer}
 .ts-left{min-width:0}
 .ts-text{min-width:0;flex:1 1 auto}
 .ts-widget{width:320px}
+
+/* 一行命令展示块 */
+.cmd-box{
+  margin: 10px 0; padding: 11px 14px; border-radius: 8px;
+  background: var(--panel2); border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; overflow-x: auto; white-space: nowrap;
+}
+.cmd-box code{ background: none; padding: 0; color: var(--text); }

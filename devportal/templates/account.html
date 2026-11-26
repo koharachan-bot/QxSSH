@@ -1,18 +1,20 @@
 {{template "header" .}}
 {{with .Data}}
+{{$u := .User}}
 <div class="page-head"><h2>账号安全</h2></div>
 <section class="card">
   <h3>账号信息</h3>
   <dl class="kv">
-    <dt>邮箱</dt><dd class="mono">{{.Email}}</dd>
-    <dt>昵称</dt><dd>{{if .Nickname}}{{.Nickname}}{{else}}-{{end}}</dd>
-    <dt>角色</dt><dd>{{if eq .Role "admin"}}管理员{{else}}开发者{{end}}</dd>
-    <dt>注册时间</dt><dd class="muted">{{date .CreatedAt}}</dd>
+    <dt>邮箱</dt><dd class="mono">{{$u.Email}}</dd>
+    <dt>昵称</dt><dd>{{if $u.Nickname}}{{$u.Nickname}}{{else}}-{{end}}</dd>
+    <dt>角色</dt><dd>{{if eq $u.Role "admin"}}管理员{{else}}开发者{{end}}</dd>
+    <dt>注册时间</dt><dd class="muted">{{date $u.CreatedAt}}</dd>
   </dl>
 </section>
+
 <section class="card">
   <h3>两步验证（TOTP）</h3>
-  {{if .TOTPEnabled}}
+  {{if $u.TOTPEnabled}}
   <p class="muted">已启用。登录时除密码外还需要验证器应用生成的 6 位验证码。</p>
   <form method="post" action="/account/2fa/disable" class="form mt10">
   <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
@@ -23,6 +25,43 @@
   {{else}}
   <p class="muted">未启用。开启后即使密码泄露，攻击者也无法登录。</p>
   <a class="btn mt10" href="/account/2fa/setup">启用两步验证</a>
+  {{end}}
+</section>
+
+<section class="card">
+  <h3>API Key</h3>
+  <p class="muted small">用于脚本或 CI 以你的身份发布应用。Key 只显示一次，请立即保存。</p>
+  <form method="post" action="/account/apikeys" class="form mt10">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>用途备注<input name="name" maxlength="40" placeholder="例如 我的构建机"></label>
+    <button class="btn" type="submit">生成 API Key</button>
+  </form>
+  {{if .Keys}}
+  <table class="table mt12">
+    <thead><tr><th>备注</th><th>前缀</th><th>创建</th><th>最后使用</th><th>状态</th><th></th></tr></thead>
+    <tbody>
+    {{range .Keys}}
+      <tr>
+        <td>{{if .Name}}{{.Name}}{{else}}-{{end}}</td>
+        <td class="mono small">{{.Prefix}}…</td>
+        <td class="muted">{{date .CreatedAt}}</td>
+        <td class="muted">{{if .LastUsedAt.IsZero}}-{{else}}{{date .LastUsedAt}}{{end}}</td>
+        <td>{{if .Revoked}}<span class="badge s-rejected">已作废</span>{{else}}<span class="badge s-published">有效</span>{{end}}</td>
+        <td>
+          {{if not .Revoked}}
+          <form method="post" action="/account/apikeys/revoke" class="inline">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn-sm ghost" type="submit">作废</button>
+          </form>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted small mt10">还没有生成过 API Key。</p>
   {{end}}
 </section>
 {{end}}

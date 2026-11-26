@@ -45,6 +45,11 @@ func (c *COS) host() string {
 	return u.Host
 }
 
+// signing 判断是否走签名模式。SecretKey 为空时退化为匿名请求（桶公有写）。
+func (c *COS) signing() bool {
+	return strings.TrimSpace(c.SecretKey) != "" && strings.TrimSpace(c.SecretID) != ""
+}
+
 // sign 计算 COS 请求签名。query 与 headers 都要求已按 key 升序、值做 URL 编码。
 func (c *COS) sign(method, pathname string, query map[string]string, headers map[string]string) (string, string) {
 	now := time.Now().Unix()
@@ -117,7 +122,9 @@ func (c *COS) Put(key string, body io.Reader, size int64, contentType string) er
 	if ct := strings.TrimSpace(contentType); ct != "" {
 		req.Header.Set("Content-Type", ct)
 	}
-	req.Header.Set("Authorization", auth)
+	if c.signing() {
+		req.Header.Set("Authorization", auth)
+	}
 
 
 	resp, err := c.Client.Do(req)
@@ -127,7 +134,11 @@ func (c *COS) Put(key string, body io.Reader, size int64, contentType string) er
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("COS PUT %s 失败：HTTP %d %s", key, resp.StatusCode, strings.TrimSpace(string(b)))
+		hint := ""
+		if !c.signing() {
+			hint = "（当前为匿名模式：请确认存储桶开放公有写，或配置 COS_SECRET_KEY 走签名）"
+		}
+		return fmt.Errorf("COS PUT %s 失败：HTTP %d %s%s", key, resp.StatusCode, strings.TrimSpace(string(b)), hint)
 	}
 	return nil
 }
@@ -143,7 +154,9 @@ func (c *COS) Delete(key string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", auth)
+	if c.signing() {
+		req.Header.Set("Authorization", auth)
+	}
 	resp, err := c.Client.Do(req)
 	if err != nil {
 		return err

@@ -1,0 +1,12 @@
+{{template "header" .}}
+<section class="narrow">
+  <h2>API Key 已生成</h2>
+  <div class="flash ok">这是唯一一次显示明文，离开本页后无法再查看。</div>
+  <div class="secret-box mt12">
+    <div class="secret-label">API Key</div>
+    <code class="secret-value" id="key">{{.Data}}</code>
+  </div>
+  <p class="muted small mt12">用法：<code>Authorization: Bearer {{.Data}}</code>，或 <code>X-API-Key: {{.Data}}</code></p>
+  <a class="btn mt16" href="/account">我已保存</a>
+</section>
+{{template "footer" .}}

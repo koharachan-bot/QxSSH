@@ -118,11 +118,12 @@ func (s *Server) handleTOTPVerify(w http.ResponseWriter, r *http.Request) {
 // handleAccount 账号安全页。
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	u := s.userOf(r)
+	keys, _ := s.Store.ListAPIKeys(u.ID)
 	s.render(w, r, "account.html", pageData{
 		Title: "账号安全",
 		Flash: r.URL.Query().Get("ok"),
 		Error: r.URL.Query().Get("err"),
-		Data:  u,
+		Data:  map[string]any{"User": u, "Keys": keys},
 	})
 }
 

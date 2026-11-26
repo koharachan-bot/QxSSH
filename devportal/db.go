@@ -141,6 +141,19 @@ func (s *Store) migrate() error {
 			UNIQUE(app_id, version)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_releases_app ON releases(app_id)`,
+		// API Key：供 CI / 脚本以用户身份发布应用，不需要浏览器会话。
+		// 只存哈希，明文仅在生成时展示一次。
+		`CREATE TABLE IF NOT EXISTS api_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			key_hash TEXT NOT NULL UNIQUE,
+			prefix TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			last_used_at INTEGER NOT NULL DEFAULT 0,
+			revoked INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_apikeys_user ON api_keys(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_status ON apps(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_owner ON apps(owner_id)`,
 	}

@@ -7,6 +7,15 @@
     <a class="btn-ghost" href="/login">已有账号登录</a>
   </div>
 </section>
+
+<section class="card">
+  <h3>让 Agent 帮你做插件</h3>
+  <p class="muted small">装这个技能后，可以对 Claude Code / Codex 说「用 qxssh-plugin 技能做一个插件并发布」，它会按规范写 manifest、打包并调用发布接口。</p>
+  <div class="cmd-box"><code>npx qxssh-plugin-skill</code></div>
+  <p class="muted small">发布前在 <a href="/account">账号安全</a> 生成 API Key：</p>
+  <div class="cmd-box"><code>export QXSSH_API_KEY=qxk_xxxxxxxx</code></div>
+</section>
+
 <section class="grid3">
   <div class="card"><h3>1. 上传安装包</h3><p>平台会自动校验 <code>manifest.json</code>、入口文件与包内路径，不通过的包不会进入审核队列。</p></div>
   <div class="card"><h3>2. 等待审核</h3><p>管理员确认应用信息与权限声明，必要时会填写驳回理由，你修改后可重新提交。</p></div>

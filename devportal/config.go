@@ -116,9 +116,9 @@ func LoadConfig() (*Config, error) {
 	if c.COSBucket == "" {
 		return nil, errors.New("缺少 COS_BUCKET")
 	}
-	if c.COSSecretID == "" || c.COSSecretKey == "" {
-		return nil, errors.New("缺少 COS_SECRET_ID / COS_SECRET_KEY")
-	}
+	// SecretKey 留空表示匿名模式：桶开放公有写时可直接 PUT，无需签名。
+	// 生产环境应配置密钥并把桶改回私有写——匿名写意味着任何人都能覆盖商店内容。
+	// （两者都不填时由 COS 客户端自动走匿名请求）
 	if c.COSBaseURL == "" {
 		c.COSBaseURL = "https://" + c.COSBucket + ".cos." + c.COSRegion + ".myqcloud.com"
 	}

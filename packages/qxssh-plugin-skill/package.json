@@ -1,0 +1,30 @@
+{
+  "name": "qxssh-plugin-skill",
+  "version": "1.0.0",
+  "description": "QxSSH 插件开发与发布技能：写 manifest、打包 .qxp、用 API Key 发布到应用商店",
+  "type": "module",
+  "bin": {
+    "qxssh-plugin-skill": "bin/install.mjs"
+  },
+  "files": [
+    "bin",
+    "skill",
+    "README.md"
+  ],
+  "keywords": [
+    "qxssh",
+    "skill",
+    "agent",
+    "plugin",
+    "marketplace"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koharachan-bot/QxSSH.git",
+    "directory": "packages/qxssh-plugin-skill"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
