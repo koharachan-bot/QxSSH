@@ -1,0 +1,47 @@
+{
+  "id": "k8s",
+  "name": "Kubernetes 集群管理",
+  "nameKey": "app.k8s.name",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "Kubernetes 工作负载、Pod、服务、节点与事件管理，含彩色日志、YAML 编辑、kubectl 控制台与傻瓜/专业双模式",
+  "descriptionKey": "app.k8s.desc",
+  "author": "QxSSH",
+  "icon": {
+    "light": "icon-light.svg",
+    "dark": "icon-dark.svg"
+  },
+  "category": "系统",
+  "categoryKey": "core.category-system",
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "kubectl",
+    "pod",
+    "deployment",
+    "helm",
+    "cluster",
+    "集群",
+    "容器编排"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1220,
+    "height": 780,
+    "minWidth": 980,
+    "minHeight": 580
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "sudo:request",
+    "sudo:forget",
+    "local:exec"
+  ],
+  "systemApp": true,
+  "disableable": true
+}

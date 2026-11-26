@@ -1,0 +1,49 @@
+{
+  "id": "docker",
+  "name": "Docker 容器管理",
+  "nameKey": "app.docker.name",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "Docker 容器、镜像、网络、卷与 Compose 管理器，含彩色日志、国内镜像加速站一键配置与傻瓜/专业双模式",
+  "descriptionKey": "app.docker.desc",
+  "author": "QxSSH",
+  "icon": {
+    "light": "icon-light.svg",
+    "dark": "icon-dark.svg"
+  },
+  "category": "系统",
+  "categoryKey": "core.category-system",
+  "keywords": [
+    "docker",
+    "container",
+    "image",
+    "compose",
+    "registry",
+    "mirror",
+    "容器",
+    "镜像",
+    "镜像站"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 760,
+    "minWidth": 960,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "exec:stream",
+    "exec:session",
+    "sudo:request",
+    "sudo:forget",
+    "local:exec"
+  ],
+  "systemApp": true,
+  "disableable": true
+}
