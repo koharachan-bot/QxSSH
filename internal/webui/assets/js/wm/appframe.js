@@ -29,6 +29,19 @@ const FRAME_ALLOW = /Firefox\//.test(navigator.userAgent)
 // 也不含 allow-popups-to-escape-sandbox（否则应用可开无沙箱弹窗逃逸隔离）。
 const FRAME_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-downloads';
 
+// 少数应用需要把自己的页面当作"正常网页"运行（例如内嵌第三方站点并保留其登录态）。
+// 沙箱标志会级联到嵌套 iframe，没有 allow-same-origin 时后代全是不透明源，
+// 第三方站点读写不了自己的 cookie/localStorage，登录态必然失效。
+//
+// 因此在 manifest 里用 webSandbox: "same-origin" 显式申请放宽；代价是该应用与宿主同源，
+// 能够以宿主身份发起同源请求，等于绕开细粒度权限（安全上必须让用户知情）。
+const FRAME_SANDBOX_SAME_ORIGIN = FRAME_SANDBOX + ' allow-same-origin';
+
+/** 取某应用应使用的 sandbox 标志 */
+export function sandboxForApp(app) {
+  return app && app.webSandbox === 'same-origin' ? FRAME_SANDBOX_SAME_ORIGIN : FRAME_SANDBOX;
+}
+
 // 应用入口「就绪」的等待上限；超时即判定入口异常，改由宿主侧给出错误面板。
 const FRAME_READY_MS = 8000;
 
@@ -1372,7 +1385,7 @@ export function mountAppFrame(bodyEl, frame, win, opts = {}) {
     class: FRAME_CLASS,
     title: win?.title || 'app',
     allow: FRAME_ALLOW,
-    sandbox: FRAME_SANDBOX,
+    sandbox: sandboxForApp(appId ? getApps().find((a) => a.id === appId) : null),
     src: entrySrc,
   });
   const entry = {

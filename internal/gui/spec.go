@@ -20,14 +20,42 @@ type Screen struct {
 }
 
 // Install 描述首次启动前需要准备的运行时（例如 Blender 的官方 tar.xz）。
-// 应用包体积受限，因此重量级程序不塞进 .qxp，而是在目标主机上按需下载。
+//
+// .qxp 有 50MB 上限，重量级程序不可能塞进应用包，所以在目标主机上按需下载。
+// 为了不被上游"删版本/换路径"拖死，URL 应当指向自建镜像，并用 Fallback 保留
+// 官方地址作为兜底；SHA256 必须写死，镜像和官方包必须是同一份文件。
 type Install struct {
-	URL             string `json:"url"`
-	SHA256          string `json:"sha256,omitempty"`
-	Dest            string `json:"dest,omitempty"`
-	StripComponents int    `json:"stripComponents,omitempty"`
+	// URL 是首选下载地址，建议指向自建镜像。
+	URL string `json:"url"`
+	// Fallback 是备用下载地址，按顺序尝试（例如官方 release 地址）。
+	Fallback []string `json:"fallback,omitempty"`
+	SHA256   string   `json:"sha256,omitempty"`
+	Dest     string   `json:"dest,omitempty"`
+	StripComponents int `json:"stripComponents,omitempty"`
 	Bin             string `json:"bin,omitempty"`
 	Size            int64  `json:"size,omitempty"`
+}
+
+// Sources 返回按优先级排列的下载地址，去重并去掉空值。
+func (in *Install) Sources() []string {
+	if in == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in.Fallback)+1)
+	add := func(u string) {
+		u = strings.TrimSpace(u)
+		if u == "" || seen[u] {
+			return
+		}
+		seen[u] = true
+		out = append(out, u)
+	}
+	add(in.URL)
+	for _, u := range in.Fallback {
+		add(u)
+	}
+	return out
 }
 
 // Spec 是 manifest.json 里 gui 字段的完整结构，描述「怎么把程序跑到屏幕会话里」。
@@ -167,11 +195,14 @@ func (s Spec) Validate() error {
 }
 
 func (in *Install) validate() error {
-	if in.URL == "" {
+	sources := in.Sources()
+	if len(sources) == 0 {
 		return errors.New("manifest.gui.install.url 不能为空")
 	}
-	if !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://") {
-		return errors.New("manifest.gui.install.url 必须是 http(s) 链接")
+	for _, u := range sources {
+		if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+			return fmt.Errorf("manifest.gui.install 的下载地址必须是 http(s)：%s", u)
+		}
 	}
 	if in.SHA256 != "" && len(in.SHA256) != 64 {
 		return errors.New("manifest.gui.install.sha256 需为 64 位十六进制")

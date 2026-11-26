@@ -5,8 +5,8 @@
     "zh-CN",
     "en-US"
   ],
-  "version": "1.0.0",
-  "description": "Blender 5.3 LTS：首次启动自动下载官方运行时；软件渲染下大场景会明显变慢",
+  "version": "1.1.0",
+  "description": "Blender 5.3 LTS：运行时已锁定版本并优先从 QxSSH 镜像下载；软件渲染下大场景会明显变慢",
   "author": "QxSSH",
   "icon": "icon.svg",
   "category": "图形应用",
@@ -39,7 +39,10 @@
     "windowManager": "auto",
     "clipboard": true,
     "install": {
-      "url": "https://download.blender.org/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz",
+      "url": "https://cos.meowhead.cn/runtimes/blender-5.3.0-linux-x64.tar.xz",
+      "fallback": [
+        "https://download.blender.org/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz"
+      ],
       "sha256": "dacb8264197a3f7fda6001285a5a506fc97ee943881261c2c3bd63c882f22e05",
       "dest": "blender-5.3.0",
       "stripComponents": 1,

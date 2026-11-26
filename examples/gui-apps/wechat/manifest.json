@@ -5,7 +5,7 @@
     "zh-CN",
     "en-US"
   ],
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "微信 Linux 版：在浏览器窗口里直接收发消息，键鼠、剪贴板与截图都可用",
   "author": "QxSSH",
   "icon": "icon.svg",

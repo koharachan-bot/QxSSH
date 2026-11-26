@@ -6,8 +6,8 @@
     "zh-CN",
     "en-US"
   ],
-  "version": "1.0.0",
-  "description": "网易云音乐网页版：在应用窗口里听歌，支持歌单、搜索与播放控制",
+  "version": "1.1.0",
+  "description": "网易云音乐网页版：内嵌播放器并保留登录态，可登录账号、收藏与同步歌单",
   "descriptionKey": "app.netease.desc",
   "author": "QxSSH",
   "icon": "icon.svg",
@@ -31,5 +31,6 @@
   },
   "permissions": [
     "ui:notify"
-  ]
+  ],
+  "webSandbox": "same-origin"
 }

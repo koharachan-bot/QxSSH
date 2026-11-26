@@ -63,6 +63,7 @@ func ensureRuntime(ctx context.Context, t Target, in *Install, dest, appID strin
 		log.Info("gui runtime ensure", "app", appID, "dest", dest)
 	}
 
+	sources := in.Sources()
 	var b strings.Builder
 	b.WriteString("set -eu\n")
 	fmt.Fprintf(&b, "DEST=%s\n", ShellQuote(dest))
@@ -71,7 +72,17 @@ func ensureRuntime(ctx context.Context, t Target, in *Install, dest, appID strin
 	b.WriteString("mkdir -p \"$DEST\"\n")
 	b.WriteString("TMP=$(mktemp -d)\n")
 	b.WriteString("trap 'rm -rf \"$TMP\"' EXIT\n")
-	fmt.Fprintf(&b, "curl -fL --retry 2 --connect-timeout 20 -o \"$TMP/pkg\" %s\n", ShellQuote(in.URL))
+
+	// 逐个源尝试：任一成功即停止。上游删版本、镜像故障都能自动绕过。
+	b.WriteString("ok=0\n")
+	for i, u := range sources {
+		fmt.Fprintf(&b, "if [ $ok -eq 0 ]; then\n")
+		fmt.Fprintf(&b, "  echo QXRUNTIME_TRY_%d %s\n", i+1, ShellQuote(u))
+		fmt.Fprintf(&b, "  if curl -fL --retry 2 --connect-timeout 20 -o \"$TMP/pkg\" %s 2>/dev/null; then ok=1; fi\n", ShellQuote(u))
+		b.WriteString("fi\n")
+	}
+	b.WriteString("if [ $ok -eq 0 ]; then echo QXRUNTIME_NO_SOURCE; exit 6; fi\n")
+
 	if in.SHA256 != "" {
 		fmt.Fprintf(&b, "printf '%%s  %%s\\n' %s \"$TMP/pkg\" | sha256sum -c - >/dev/null\n", ShellQuote(in.SHA256))
 	}
@@ -88,7 +99,7 @@ func ensureRuntime(ctx context.Context, t Target, in *Install, dest, appID strin
 		if detail == "" && err != nil {
 			detail = err.Error()
 		}
-		return fmt.Errorf("准备运行时失败（%s）：%s", in.URL, detail)
+		return fmt.Errorf("准备运行时失败（已尝试 %d 个下载源）：%s", len(sources), detail)
 	}
 	return nil
 }

@@ -36,7 +36,8 @@ func TestSpecValidateRejects(t *testing.T) {
 		{"帧率越界", Spec{Command: []string{"x"}, FPS: 240}, "fps"},
 		{"码率越界", Spec{Command: []string{"x"}, BitrateKbps: 99999}, "bitrateKbps"},
 		{"窗口管理器非法", Spec{Command: []string{"x"}, WindowManager: "kwin"}, "windowManager"},
-		{"安装地址非 http", Spec{Command: []string{"x"}, Install: &Install{URL: "ftp://a/b"}}, "install.url"},
+		{"安装地址非 http", Spec{Command: []string{"x"}, Install: &Install{URL: "ftp://a/b"}}, "http(s)"},
+		{"备用地址非法", Spec{Command: []string{"x"}, Install: &Install{URL: "https://a/b", Fallback: []string{"ftp://c/d"}}}, "http(s)"},
 	}
 	for _, c := range cases {
 		err := c.spec.Validate()

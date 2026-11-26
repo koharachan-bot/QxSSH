@@ -47,3 +47,6 @@ dist/
 
 # Local runtime data (SQLite database, master key, audit logs)
 data/
+
+# 命令变量未展开时误建的字面目录
+%SystemDrive%/

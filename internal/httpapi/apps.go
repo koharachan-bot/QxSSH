@@ -56,6 +56,35 @@ type appManifest struct {
 	Runtime string `json:"runtime,omitempty"`
 	// GUI 是 linux-gui 运行时的启动参数；只有声明该运行时才允许出现。
 	GUI *gui.Spec `json:"gui,omitempty"`
+
+	// WebSandbox 决定应用 iframe 的隔离级别：
+	//   ""（默认）——不透明源沙箱，与宿主完全隔离；
+	//   "same-origin"——额外放行 allow-same-origin，供需要内嵌第三方站点并保留其
+	//   登录态的应用使用。代价是该应用与宿主同源，能绕过细粒度权限，属高危选项。
+	WebSandbox string `json:"webSandbox,omitempty"`
+}
+
+// 允许的 webSandbox 取值。
+const (
+	sandboxDefault    = ""
+	sandboxSameOrigin = "same-origin"
+)
+
+// normalizeWebSandbox 校验并归一隔离级别声明。
+func normalizeWebSandbox(m *appManifest) error {
+	v := strings.ToLower(strings.TrimSpace(m.WebSandbox))
+	switch v {
+	case sandboxDefault:
+		m.WebSandbox = ""
+	case sandboxSameOrigin:
+		m.WebSandbox = sandboxSameOrigin
+	default:
+		return fmt.Errorf("manifest.webSandbox 取值非法：%q（可选 same-origin，留空为默认隔离）", m.WebSandbox)
+	}
+	if m.WebSandbox == sandboxSameOrigin && m.Runtime == appRuntimeLinuxGUI {
+		return errors.New("manifest.webSandbox 只对 Web 应用有效，linux-gui 应用请去掉")
+	}
+	return nil
 }
 
 // appRuntimeLinuxGUI 是目前唯一的非 Web 运行时：插件只描述「跑什么程序」，
@@ -83,7 +112,7 @@ func normalizeAppRuntime(m *appManifest) error {
 	default:
 		return fmt.Errorf("manifest.runtime 取值非法：%q（目前仅支持 linux-gui）", m.Runtime)
 	}
-	return nil
+	return normalizeWebSandbox(m)
 }
 
 // appIconSpec 描述应用图标的取值，支持两种清单写法：

@@ -5,8 +5,8 @@
     "zh-CN",
     "en-US"
   ],
-  "version": "1.0.0",
-  "description": "Blender 4.5 LTS（官方没有 4.6 版本，4.5 是当前 4.x 维护分支）：首次启动自动下载官方运行时",
+  "version": "1.1.0",
+  "description": "Blender 4.5 LTS（官方没有 4.6 版本，4.5 是当前 4.x 维护分支）：运行时已锁定版本并优先从 QxSSH 镜像下载",
   "author": "QxSSH",
   "icon": "icon.svg",
   "category": "图形应用",
@@ -39,7 +39,10 @@
     "windowManager": "auto",
     "clipboard": true,
     "install": {
-      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.13-linux-x64.tar.xz",
+      "url": "https://cos.meowhead.cn/runtimes/blender-4.5.13-linux-x64.tar.xz",
+      "fallback": [
+        "https://download.blender.org/release/Blender4.5/blender-4.5.13-linux-x64.tar.xz"
+      ],
       "sha256": "da4e69b06b75b9e642d106496c50e7e240218b411d2f6e18271c1d1d819cef91",
       "dest": "blender-4.5.13",
       "stripComponents": 1,
