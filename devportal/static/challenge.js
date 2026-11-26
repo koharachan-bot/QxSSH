@@ -66,9 +66,14 @@
       if (Date.now() > deadline) return Promise.reject(new Error('计算超时'));
       var start = counter;
       var batch = [];
+      // 必须用 IIFE 把 counter 固定住：var 是函数作用域，直接闭包会让所有批次
+      // 拿到循环结束后的同一个值，算出来的 solution 全部对不上。
       for (var i = 0; i < 32; i++) {
-        var c = start + i;
-        batch.push(sha256Hex(nonce + ':' + c).then(function (h) { return { h: h, c: c }; }));
+        (function (c) {
+          batch.push(sha256Hex(nonce + ':' + c).then(function (h) {
+            return { h: h, c: c };
+          }));
+        })(start + i);
       }
       counter = start + 32;
       return Promise.all(batch).then(function (res) {
