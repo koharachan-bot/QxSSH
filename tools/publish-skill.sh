@@ -41,4 +41,4 @@ fi
 
 echo "==> 验证"
 npm view qxssh-plugin-skill version || true
-echo "完成：npx qxssh-plugin-skill"
+echo "完成。若只更新自托管分发包，把 packages/qxssh-plugin-skill/install/ 上传到 COS 的 skill/ 目录即可"
