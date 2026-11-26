@@ -1,0 +1,35 @@
+{
+  "id": "netease-music",
+  "name": "网易云音乐",
+  "nameKey": "app.netease.name",
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "version": "1.0.0",
+  "description": "网易云音乐网页版：在应用窗口里听歌，支持歌单、搜索与播放控制",
+  "descriptionKey": "app.netease.desc",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "娱乐",
+  "categoryKey": "app.netease.category",
+  "keywords": [
+    "music",
+    "netease",
+    "163",
+    "yinyue",
+    "音乐",
+    "歌单"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1180,
+    "height": 760,
+    "minWidth": 720,
+    "minHeight": 480
+  },
+  "permissions": [
+    "ui:notify"
+  ]
+}

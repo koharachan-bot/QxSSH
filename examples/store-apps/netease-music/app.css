@@ -1,0 +1,30 @@
+/* 网易云音乐插件外壳样式 */
+html, body { margin: 0; height: 100%; background: var(--background, #121212); }
+.nm-root { display: flex; flex-direction: column; height: 100%; }
+
+.nm-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 12px;
+  background: var(--card, #1a1a1a); color: var(--foreground, #e8e8e8);
+  border-bottom: 1px solid var(--border, rgba(255,255,255,.08));
+}
+.nm-dot { width: 8px; height: 8px; border-radius: 50%; background: #c20c0c; flex: none; }
+.nm-title { font-weight: 600; }
+.nm-grow { flex: 1; }
+.nm-btn {
+  border: 1px solid var(--border, rgba(255,255,255,.12));
+  background: transparent; color: inherit; font: inherit;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer; text-decoration: none;
+}
+.nm-btn:hover { background: rgba(255,255,255,.08); }
+
+.nm-stage { position: relative; flex: 1; min-height: 0; }
+.nm-stage iframe { width: 100%; height: 100%; border: 0; display: block; background: #121212; }
+
+.nm-fallback {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  max-width: 420px; padding: 16px 18px; border-radius: 12px;
+  background: rgba(0,0,0,.86); color: #e8e8e8; font-size: 13px; line-height: 1.7;
+  border: 1px solid rgba(255,255,255,.12); text-align: center;
+}
+.nm-fallback p { margin: 0 0 8px; }
