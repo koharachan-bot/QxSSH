@@ -17,8 +17,11 @@ import (
 // .qxp。目录接口由宿主拉取并缓存后下发给应用管理器，前端只负责展示与点击安装
 // （安装复用 apps/install 的 URL 安装路径）。
 const (
-	// defaultStoreCatalog 是开箱自带的官方商店索引地址；自建镜像可用 QXSSH_STORE_URL 覆盖。
-	defaultStoreCatalog = "https://app.meowhead.cn/index.json"
+	// defaultStoreCatalog 是开箱自带的官方商店索引地址：商店是纯静态站
+	// （index.json + .qxp + 图标），由对象存储托管，因此这里指向存储的自定义域名。
+	// 开发者平台是另一套系统（提交与管理应用），与商店数据源无关。
+	// 自建镜像可用 QXSSH_STORE_URL 覆盖。
+	defaultStoreCatalog = "https://cos.meowhead.cn/index.json"
 
 	storeCatalogMaxBytes = 1 << 20
 	storeCatalogTTL      = 5 * time.Minute
