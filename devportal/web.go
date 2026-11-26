@@ -23,6 +23,10 @@ type Server struct {
 	COS   *COS
 	Pub   *Publisher
 	tpl   *template.Template
+
+	// 注册与登录的限速器：两者都是公开端点，不限速会被脚本刷穿。
+	regLimiter   *rateLimiter
+	loginLimiter *rateLimiter
 }
 
 // pageData 是所有模板共用的上下文。
@@ -45,7 +49,12 @@ func newServer(cfg *Config, st *Store, cos *COS) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("解析模板失败：%w", err)
 	}
-	s := &Server{Cfg: cfg, Store: st, COS: cos, tpl: tpl}
+	s := &Server{
+		Cfg: cfg, Store: st, COS: cos, tpl: tpl,
+		// 每 IP 每小时最多 5 次注册；每 IP 每 10 分钟最多 10 次登录尝试。
+		regLimiter:   newRateLimiter(5, time.Hour),
+		loginLimiter: newRateLimiter(10, 10*time.Minute),
+	}
 	s.Pub = &Publisher{Store: st, COS: cos, Cfg: cfg}
 	return s, nil
 }

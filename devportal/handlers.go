@@ -30,6 +30,13 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if ok, wait := s.loginLimiter.allow(ip); !ok {
+		redirectWith(w, r, "/login",
+			fmt.Sprintf("尝试过于频繁，请 %d 秒后再试", int(wait.Seconds())+1), "err")
+		return
+	}
+
 	email := r.FormValue("email")
 	pw := r.FormValue("password")
 	u, err := s.Store.UserByEmail(email)
@@ -37,15 +44,34 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/login", "邮箱或口令不正确", "err")
 		return
 	}
-	issueSession(w, s.Cfg, u.ID)
+	// 登录成功清零，正常用户不会因为之前的失败被锁。
+	s.loginLimiter.reset(ip)
+	issueSession(w, r, s.Cfg, u.ID)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
+	if s.Cfg.Registration == "closed" {
+		s.render(w, r, "error.html", pageData{
+			Title: "注册已关闭",
+			Error: "平台暂不开放自助注册，请联系管理员开通账号。",
+		})
+		return
+	}
 	s.render(w, r, "register.html", pageData{Title: "注册", Error: r.URL.Query().Get("err")})
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if s.Cfg.Registration == "closed" {
+		redirectWith(w, r, "/register", "注册已关闭", "err")
+		return
+	}
+	if ok, wait := s.regLimiter.allow(clientIP(r)); !ok {
+		redirectWith(w, r, "/register",
+			fmt.Sprintf("注册过于频繁，请 %d 分钟后再试", int(wait.Minutes())+1), "err")
+		return
+	}
+
 	email := r.FormValue("email")
 	pw := r.FormValue("password")
 	nick := r.FormValue("nickname")
@@ -59,12 +85,12 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/register", err.Error(), "err")
 		return
 	}
-	issueSession(w, s.Cfg, u.ID)
+	issueSession(w, r, s.Cfg, u.ID)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	clearSession(w)
+	clearSession(w, r)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

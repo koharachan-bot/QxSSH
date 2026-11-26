@@ -49,8 +49,29 @@ func signValue(key string, uid int64, exp int64) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+// isHTTPSRequest 判断浏览器这一端看到的是不是 HTTPS。
+//
+// 不能直接看配置里的 BaseURL：站点在 CDN/反向代理后面时，回源常常是明文 HTTP，
+// 若照 BaseURL 一律加 Secure，用户通过 http:// 访问时浏览器会直接丢弃这个 Cookie，
+// 表现就是"注册成功但登录不上"。这里以实际请求为准，再兼容常见的转发头。
+func isHTTPSRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	for _, h := range []string{"X-Forwarded-Proto", "X-Forwarded-Ssl", "Front-End-Https"} {
+		v := strings.ToLower(strings.TrimSpace(r.Header.Get(h)))
+		if v == "https" || v == "on" || v == "1" {
+			return true
+		}
+	}
+	return false
+}
+
 // issueSession 写入签名会话 Cookie。
-func issueSession(w http.ResponseWriter, c *Config, uid int64) {
+func issueSession(w http.ResponseWriter, r *http.Request, c *Config, uid int64) {
 	exp := time.Now().Add(sessionTTL).Unix()
 	sig := signValue(c.SessionKey, uid, exp)
 	val := strconv.FormatInt(uid, 10) + "." + strconv.FormatInt(exp, 10) + "." + sig
@@ -59,17 +80,23 @@ func issueSession(w http.ResponseWriter, c *Config, uid int64) {
 		Value:    val,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   strings.HasPrefix(c.BaseURL, "https://"),
+		Secure:   isHTTPSRequest(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(sessionTTL.Seconds()),
 	})
 }
 
 // clearSession 清除会话 Cookie。
-func clearSession(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
-	})
+//
+// 同时下发 Secure 与非 Secure 两种形态：若之前是在 https 下签发的 Cookie，
+// 只有在 https 页面里才能覆盖它；多给一次非 Secure 版本可以保证 http 下也能退出登录。
+func clearSession(w http.ResponseWriter, r *http.Request) {
+	for _, secure := range []bool{isHTTPSRequest(r), false} {
+		http.SetCookie(w, &http.Cookie{
+			Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
+			Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		})
+	}
 }
 
 // currentUID 解析并校验会话，返回用户 ID；无效时返回 0。

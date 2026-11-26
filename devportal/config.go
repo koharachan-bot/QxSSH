@@ -36,6 +36,8 @@ type Config struct {
 	PublicBase string
 	// MaxUploadMB 限制单次上传的应用包大小。
 	MaxUploadMB int64
+	// Registration 控制注册开关：open（默认，带限速）/ closed（只有管理员能开号）。
+	Registration string
 }
 
 func envStr(key, def string) string {
@@ -61,6 +63,10 @@ func LoadConfig() (*Config, error) {
 		COSBaseURL:   strings.TrimRight(envStr("COS_BASE_URL", ""), "/"),
 		PublicBase:   strings.TrimRight(envStr("STORE_PUBLIC_BASE", ""), "/"),
 		MaxUploadMB:  50,
+		Registration: strings.ToLower(envStr("PORTAL_REGISTRATION", "open")),
+	}
+	if c.Registration != "open" && c.Registration != "closed" {
+		return nil, errors.New("PORTAL_REGISTRATION 只能是 open 或 closed")
 	}
 	if v := envStr("PORTAL_MAX_UPLOAD_MB", ""); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
