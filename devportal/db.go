@@ -127,6 +127,20 @@ func (s *Store) migrate() error {
 		`ALTER TABLE users ADD COLUMN email_code TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN email_code_exp INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE users ADD COLUMN email_code_tries INTEGER NOT NULL DEFAULT 0`,
+		// 历次发布记录：同一个应用可以保留多个版本，索引里会全部列出，
+		// 客户端据此判断更新、也允许降级回旧版。
+		`CREATE TABLE IF NOT EXISTS releases (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			app_id TEXT NOT NULL,
+			version TEXT NOT NULL,
+			package_path TEXT NOT NULL DEFAULT '',
+			package_size INTEGER NOT NULL DEFAULT 0,
+			package_sha TEXT NOT NULL DEFAULT '',
+			changelog TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			UNIQUE(app_id, version)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_releases_app ON releases(app_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_status ON apps(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_owner ON apps(owner_id)`,
 	}

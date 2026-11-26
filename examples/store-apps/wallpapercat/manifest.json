@@ -28,7 +28,6 @@
   ],
   "entry": "index.html",
   "singleton": true,
-  "disableable": true,
   "preferredSize": {
     "width": 980,
     "height": 680,
@@ -45,6 +44,5 @@
     "prefs:self:write",
     "wallpaper:read",
     "wallpaper:write"
-  ],
-  "systemApp": true
+  ]
 }

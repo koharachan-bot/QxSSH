@@ -129,5 +129,9 @@
   "app.store.action-refresh": "Refresh",
   "app.store.err-catalog-failed": "Failed to fetch the store catalog",
   "app.store.err-catalog-empty": "The store catalog is empty",
-  "app.store.desc-missing-market": "No description"
+  "app.store.desc-missing-market": "No description",
+  "app.store.market-update": "Update",
+  "app.store.market-newer": "New version",
+  "app.store.market-pick-version": "Choose a version to install",
+  "app.store.market-version-hint": "Switch version ({v1} total)"
 }

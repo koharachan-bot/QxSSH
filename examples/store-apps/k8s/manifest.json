@@ -41,7 +41,5 @@
     "sudo:request",
     "sudo:forget",
     "local:exec"
-  ],
-  "systemApp": true,
-  "disableable": true
+  ]
 }

@@ -129,5 +129,9 @@
   "app.store.action-refresh": "刷新",
   "app.store.err-catalog-failed": "商店目录拉取失败",
   "app.store.err-catalog-empty": "商店目录为空",
-  "app.store.desc-missing-market": "暂无简介"
+  "app.store.desc-missing-market": "暂无简介",
+  "app.store.market-update": "更新",
+  "app.store.market-newer": "有新版本",
+  "app.store.market-pick-version": "选择要安装的版本",
+  "app.store.market-version-hint": "切换版本（共 {v1} 个）"
 }

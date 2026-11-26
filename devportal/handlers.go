@@ -314,7 +314,12 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "保存记录失败："+err.Error(), "err")
 		return
 	}
-	redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "安装包已上传并通过校验", "ok")
+	// 每个版本单独留档：发布时会把全部历史版本推到商店，客户端可据此更新或降级。
+	if err := s.Store.UpsertRelease(a.AppID, parsed.Manifest.Version, dest,
+		int64(len(data)), hex.EncodeToString(sum[:]), strings.TrimSpace(r.FormValue("changelog"))); err != nil {
+		s.logf("记录版本失败 app=%s version=%s err=%v", a.AppID, parsed.Manifest.Version, err)
+	}
+	redirectWith(w, r, fmt.Sprintf("/apps/%d", id), "安装包已上传并通过校验（版本 "+parsed.Manifest.Version+"）", "ok")
 }
 
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {

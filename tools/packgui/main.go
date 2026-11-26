@@ -279,6 +279,7 @@ func packDir(dir, out string) error {
 	var m struct {
 		ID      string    `json:"id"`
 		Runtime string    `json:"runtime"`
+		Entry   string    `json:"entry"`
 		GUI     *gui.Spec `json:"gui"`
 	}
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -287,14 +288,30 @@ func packDir(dir, out string) error {
 	if !appIDRe.MatchString(m.ID) {
 		return errors.New("manifest.id 非法（只允许字母、数字、- 与 _）")
 	}
-	if m.Runtime != "linux-gui" {
-		return fmt.Errorf("manifest.runtime 应为 linux-gui，实际 %q", m.Runtime)
-	}
-	if m.GUI == nil {
-		return errors.New("manifest.gui 不能为空")
-	}
-	if err := m.GUI.Validate(); err != nil {
-		return err
+	// 两种形态都支持：
+	//   runtime=linux-gui —— 图形应用，校验 gui 启动参数；
+	//   runtime 为空      —— 普通 Web 应用，校验入口页确实存在。
+	if m.Runtime == "linux-gui" {
+		if m.GUI == nil {
+			return errors.New("manifest.gui 不能为空")
+		}
+		if err := m.GUI.Validate(); err != nil {
+			return err
+		}
+	} else if m.Runtime == "" {
+		entry := strings.TrimSpace(m.Entry)
+		if entry == "" {
+			entry = "index.html"
+		}
+		entry = strings.TrimPrefix(strings.ReplaceAll(entry, "\\", "/"), "./")
+		if strings.Contains(entry, "..") {
+			return errors.New("manifest.entry 不能含 ..")
+		}
+		if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(entry))); err != nil || fi.IsDir() {
+			return fmt.Errorf("入口页 %q 不存在", entry)
+		}
+	} else {
+		return fmt.Errorf("manifest.runtime 目前只支持 linux-gui 或留空，实际 %q", m.Runtime)
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil && filepath.Dir(out) != "." {
 		return err

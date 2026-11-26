@@ -34,7 +34,5 @@
     "server:upload",
     "prefs:self:read",
     "prefs:self:write"
-  ],
-  "systemApp": true,
-  "disableable": true
+  ]
 }

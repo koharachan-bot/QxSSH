@@ -175,6 +175,10 @@ type storeIndex struct {
 	Apps    []storeEntry `json:"apps"`
 }
 
+// storeEntry 是索引里的一条"应用 @ 版本"记录。
+//
+// 同一个 id 可以出现多次，分别代表不同版本：客户端据此判断"有没有更新"，
+// 也能让用户主动装回旧版本（降级）。sorted 后最新版本排在同 id 的第一条。
 type storeEntry struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
@@ -188,6 +192,11 @@ type storeEntry struct {
 	SHA256      string   `json:"sha256,omitempty"`
 	Runtime     string   `json:"runtime,omitempty"`
 	Keywords    []string `json:"keywords,omitempty"`
+	// Released 是发布时间（YYYY-MM-DD），Changelog 是本版说明，供客户端展示。
+	Released  string `json:"released,omitempty"`
+	Changelog string `json:"changelog,omitempty"`
+	// Latest 标记同 id 下的最新版，客户端可据此直接显示"有新版本"。
+	Latest bool `json:"latest,omitempty"`
 }
 
 // jsonMarshalIndent 是带缩进的序列化封装，统一索引文件的排版风格。
@@ -206,6 +215,12 @@ func licenseOK(string) bool { return true }
 func nowUTC() int64 { return time.Now().UTC().Unix() }
 
 // sortEntries 让索引顺序稳定，避免每次发布产生无意义的差异。
+// sortEntries 让索引顺序稳定：同 id 聚在一起，版本从新到旧。
 func sortEntries(list []storeEntry) {
-	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].ID != list[j].ID {
+			return list[i].ID < list[j].ID
+		}
+		return CompareVersions(list[i].Version, list[j].Version) > 0
+	})
 }

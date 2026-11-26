@@ -62,12 +62,17 @@ async function main() {
     const buf = await fs.readFile(file);
     const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
 
+    // icon 支持两种清单写法：字符串，或 {light, dark} 对象（取亮色那张做商店图标）。
+    let iconName = m.icon;
+    if (iconName && typeof iconName === "object") {
+      iconName = iconName.light || iconName.dark || "";
+    }
     let icon = "";
-    if (m.icon && /\.[a-z0-9]+$/i.test(m.icon)) {
-      const ext = path.extname(m.icon);
+    if (iconName && /\.[a-z0-9]+$/i.test(iconName)) {
+      const ext = path.extname(iconName);
       const dst = path.join(icons, id + ext);
       try {
-        await fs.copyFile(path.join(dir, m.icon), dst);
+        await fs.copyFile(path.join(dir, iconName), dst);
         icon = "apps/icons/" + id + ext;
       } catch { /* 图标缺失不阻塞打包 */ }
     }
@@ -89,7 +94,7 @@ async function main() {
     console.log(id + " -> " + buf.length + " bytes, sha256=" + sha256.slice(0, 12));
   }
 
-  const catalog = { schema: 1, name: opts.name, updated: new Date().toISOString().slice(0, 10) };
+  const catalog = { schema: 2, name: opts.name, updated: new Date().toISOString().slice(0, 10) };
   if (opts.base) catalog.base = opts.base;
   catalog.apps = apps;
   await fs.writeFile(path.join(opts.out, "index.json"), JSON.stringify(catalog, null, 2) + "\n", "utf8");

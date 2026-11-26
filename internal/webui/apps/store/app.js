@@ -876,7 +876,42 @@ function boot(el) {
     }
   }
 
-  function marketRow(a) {
+  /** 版本比较：>0 表示 a 比 b 新。与后端 CompareVersions 保持同一语义。 */
+  function compareVersions(a, b) {
+    const norm = (v) => String(v || '').trim().replace(/^v/i, '');
+    const pa = norm(a) ? norm(a).split(/[.\-+]/) : [];
+    const pb = norm(b) ? norm(b).split(/[.\-+]/) : [];
+    const n = Math.max(pa.length, pb.length);
+    for (let i = 0; i < n; i++) {
+      let x = i < pa.length ? pa[i] : '0';
+      let y = i < pb.length ? pb[i] : '0';
+      if (x === y) continue;
+      const nx = Number(x), ny = Number(y);
+      const xIsNum = Number.isFinite(nx) && /^[0-9]+$/.test(x);
+      const yIsNum = Number.isFinite(ny) && /^[0-9]+$/.test(y);
+      if (xIsNum && yIsNum) return nx > ny ? 1 : -1;
+      if (xIsNum) return 1;
+      if (yIsNum) return -1;
+      return x > y ? 1 : -1;
+    }
+    return 0;
+  }
+
+  /** 把扁平的商店索引按 id 聚合成 { latest, versions[] } */
+  function groupCatalog(list) {
+    const map = new Map();
+    for (const a of list) {
+      if (!a || !a.id) continue;
+      if (!map.has(a.id)) map.set(a.id, []);
+      map.get(a.id).push(a);
+    }
+    return [...map.entries()].map(([id, versions]) => {
+      const sorted = [...versions].sort((x, y) => compareVersions(y.version, x.version));
+      return { id, latest: sorted[0], versions: sorted };
+    });
+  }
+
+  function marketRow(entry) {
     const has = installedOf(a.id);
     const busy = marketBusy.value === a.id;
     const actions = h('div', { class: 'am-actions' }, [
@@ -940,7 +975,7 @@ function boot(el) {
       h('div', { class: 'am-toolbar' }, [
         h('div', { class: 'am-head' }, [
           h('div', { class: 'am-head-title', text: (cat && cat.name) || t('app.store.tab-market') }),
-          h('div', { class: 'am-head-sub', text: tf('app.store.market-count', { v1: (cat && cat.apps ? cat.apps.length : 0) }) }),
+          h('div', { class: 'am-head-sub', text: tf('app.store.market-count', { v1: groupCatalog(cat && Array.isArray(cat.apps) ? cat.apps : []).length }) }),
         ]),
         h('span', { class: 'qx-grow' }),
         h('button', {

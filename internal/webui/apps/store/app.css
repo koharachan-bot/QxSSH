@@ -187,3 +187,12 @@
   background: color-mix(in srgb, var(--warning) 12%, var(--card));
   border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
 }
+
+/* 商店版本选择器与变更说明 */
+.am-ver-select{
+  height: 28px; max-width: 132px; padding: 0 6px; border-radius: 6px;
+  background: var(--card); color: var(--foreground);
+  border: 1px solid var(--border); font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.am-ver-select:disabled { opacity: .5; cursor: not-allowed; }
+.am-changelog { margin-top: 3px; line-height: 1.5; }
