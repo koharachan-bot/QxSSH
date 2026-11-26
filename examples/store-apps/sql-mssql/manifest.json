@@ -1,0 +1,30 @@
+{
+  "id": "sql-mssql",
+  "name": "SQL Server 管理",
+  "version": "1.0.0",
+  "description": "SQL Server 管理：库表浏览、T-SQL 编辑执行、影响行数统计，口令经环境变量传递",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "工具",
+  "keywords": [
+    "mssql",
+    "sqlserver",
+    "sqlcmd",
+    "数据库",
+    "查询"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 780,
+    "minWidth": 900,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "prefs:self:read",
+    "prefs:self:write"
+  ]
+}

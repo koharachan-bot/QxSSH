@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN" translate="no" class="notranslate">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="google" content="notranslate">
+<title>PHP 管理器</title>
+<script>(function(){var t='';try{t=new URLSearchParams(location.search).get('theme')||''}catch(e){}if(t!=='dark'&&t!=='light'){t='';try{var c=localStorage.getItem('qx-prefs-cache');t=(c?(JSON.parse(c)['qx-theme']||''):'')||localStorage.getItem('qx-theme')||''}catch(e){}}var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)})()</script>
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<div class="pm-root" id="app">
+
+  <header class="pm-head">
+    <div class="pm-brand">
+      <span class="pm-logo" aria-hidden="true"></span>
+      <div class="pm-brand-text">
+        <h1 class="pm-title">PHP 管理器</h1>
+        <p class="pm-sub" id="hostLabel">正在建立宿主连接</p>
+      </div>
+    </div>
+    <div class="pm-head-right">
+      <span class="pm-chip" id="panelChip" hidden>未探测</span>
+      <button class="pm-btn" id="btnProbe" type="button">重新探测</button>
+    </div>
+  </header>
+
+  <nav class="pm-tabs" role="tablist" aria-label="视图切换">
+    <button class="pm-tab is-active" type="button" data-view="overview" role="tab" aria-selected="true">概览</button>
+    <button class="pm-tab" type="button" data-view="php" role="tab" aria-selected="false">PHP 版本</button>
+    <button class="pm-tab" type="button" data-view="sites" role="tab" aria-selected="false">站点</button>
+    <button class="pm-tab" type="button" data-view="log" role="tab" aria-selected="false">执行记录</button>
+  </nav>
+
+  <main class="pm-main" id="main">
+    <section class="pm-view" data-view="overview" id="viewOverview"></section>
+    <section class="pm-view" data-view="php" id="viewPhp" hidden></section>
+    <section class="pm-view" data-view="sites" id="viewSites" hidden></section>
+    <section class="pm-view" data-view="log" id="viewLog" hidden></section>
+  </main>
+
+  <div class="pm-toast-wrap" id="toastWrap" aria-live="polite"></div>
+</div>
+
+<script src="./js/core.js"></script>
+<script src="./js/probe.js"></script>
+<script src="./js/actions.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>

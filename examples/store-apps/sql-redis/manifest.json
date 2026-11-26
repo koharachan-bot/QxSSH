@@ -1,0 +1,30 @@
+{
+  "id": "sql-redis",
+  "name": "Redis 管理",
+  "version": "1.0.0",
+  "description": "Redis 键值管理：键空间扫描、按类型预览值、命令控制台，危险命令二次确认，口令经环境变量传递",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "工具",
+  "keywords": [
+    "redis",
+    "cache",
+    "kv",
+    "缓存",
+    "键值"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 780,
+    "minWidth": 900,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "prefs:self:read",
+    "prefs:self:write"
+  ]
+}

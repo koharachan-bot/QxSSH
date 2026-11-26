@@ -1,0 +1,30 @@
+{
+  "id": "sql-mongo",
+  "name": "MongoDB 管理",
+  "version": "1.0.0",
+  "description": "MongoDB 管理：库与集合浏览、文档 JSON 视图、mongosh 表达式执行，口令只出现在临时脚本里",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "工具",
+  "keywords": [
+    "mongo",
+    "mongodb",
+    "mongosh",
+    "文档",
+    "数据库"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 780,
+    "minWidth": 900,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "prefs:self:read",
+    "prefs:self:write"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "php-manager",
+  "name": "PHP 管理器",
+  "version": "1.0.0",
+  "description": "接管宝塔面板与 1Panel：识别面板与服务状态，管理站点与 PHP 版本，重载 PHP-FPM 与 nginx，修改 php.ini，签发或续签证书",
+  "author": "QxSSH",
+  "icon": {
+    "light": "icon-light.svg",
+    "dark": "icon-dark.svg"
+  },
+  "category": "运维",
+  "keywords": [
+    "php",
+    "php-fpm",
+    "bt",
+    "baota",
+    "1panel",
+    "nginx",
+    "站点",
+    "运维",
+    "php.ini"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1240,
+    "height": 800,
+    "minWidth": 980,
+    "minHeight": 600
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "exec:stream",
+    "sudo:request",
+    "server:read",
+    "server:upload",
+    "server:download"
+  ]
+}

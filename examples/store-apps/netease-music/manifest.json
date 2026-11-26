@@ -6,11 +6,11 @@
     "zh-CN",
     "en-US"
   ],
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "网易云音乐网页版：内嵌播放器并保留登录态，可登录账号、收藏与同步歌单",
   "descriptionKey": "app.netease.desc",
   "author": "QxSSH",
-  "icon": "icon.svg",
+  "icon": "icon.png",
   "category": "娱乐",
   "categoryKey": "app.netease.category",
   "keywords": [

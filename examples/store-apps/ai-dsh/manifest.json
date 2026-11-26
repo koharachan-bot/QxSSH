@@ -1,0 +1,35 @@
+{
+  "id": "ai-dsh",
+  "name": "DeepSeek Harness 启动器",
+  "version": "1.0.0",
+  "description": "检测并启动 DeepSeek Harness（dsh）终端：官方 npm 安装命令、一键安装、指定工作目录后直接在新终端里打开",
+  "author": "QxSSH",
+  "icon": {
+    "light": "icon-light.svg",
+    "dark": "icon-dark.svg"
+  },
+  "category": "工具",
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "harness",
+    "ai",
+    "terminal",
+    "launcher"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 880,
+    "height": 680,
+    "minWidth": 720,
+    "minHeight": 480
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "term:open",
+    "prefs:self:read",
+    "prefs:self:write"
+  ]
+}

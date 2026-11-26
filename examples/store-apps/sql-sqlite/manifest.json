@@ -1,0 +1,33 @@
+{
+  "id": "sql-sqlite",
+  "name": "SQLite 管理",
+  "version": "1.0.0",
+  "description": "SQLite 数据库文件管理：远端库文件浏览、上传下载、表结构查看与 SQL 执行，结果以 JSON 解析",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "工具",
+  "keywords": [
+    "sqlite",
+    "sqlite3",
+    "数据库",
+    "文件",
+    "查询"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 780,
+    "minWidth": 900,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "prefs:self:read",
+    "prefs:self:write",
+    "server:read",
+    "server:upload",
+    "server:download"
+  ]
+}

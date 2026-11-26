@@ -1,0 +1,30 @@
+{
+  "id": "sql-mysql",
+  "name": "MySQL 管理",
+  "version": "1.0.0",
+  "description": "MySQL / MariaDB 数据库管理：主机连接、库表结构浏览、SQL 编辑执行与结果分页，口令不落命令行",
+  "author": "QxSSH",
+  "icon": "icon.svg",
+  "category": "工具",
+  "keywords": [
+    "mysql",
+    "mariadb",
+    "sql",
+    "数据库",
+    "查询"
+  ],
+  "entry": "index.html",
+  "singleton": true,
+  "preferredSize": {
+    "width": 1200,
+    "height": 780,
+    "minWidth": 900,
+    "minHeight": 560
+  },
+  "permissions": [
+    "hosts:read",
+    "exec:run",
+    "prefs:self:read",
+    "prefs:self:write"
+  ]
+}
