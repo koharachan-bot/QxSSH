@@ -47,33 +47,50 @@ func (s *Store) CreateUser(email, pw, nickname, role string) (*User, error) {
 }
 
 // UserByID 按 ID 取用户。
-func (s *Store) UserByID(id int64) (*User, error) {
-	row := s.db.QueryRow(`SELECT id, email, pass_hash, nickname, role, created_at FROM users WHERE id=?`, id)
+const userCols = `id, email, pass_hash, nickname, role, created_at, totp_secret, totp_enabled, recovery_hashes, email_verified`
+
+func scanUser(sc interface{ Scan(...any) error }) (*User, error) {
 	var u User
 	var ts int64
-	if err := row.Scan(&u.ID, &u.Email, &u.PassHash, &u.Nickname, &u.Role, &ts); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+	var enabled, verified int
+	if err := sc.Scan(&u.ID, &u.Email, &u.PassHash, &u.Nickname, &u.Role, &ts,
+		&u.TOTPSecret, &enabled, &u.RecoveryHashes, &verified); err != nil {
 		return nil, err
 	}
 	u.CreatedAt = toTime(ts)
+	u.TOTPEnabled = enabled != 0
+	u.EmailVerified = verified != 0
 	return &u, nil
 }
 
+// SetTOTP 保存 2FA 状态。enabled 为真时要求 secret 非空。
+func (s *Store) SetTOTP(id int64, secret string, enabled bool, recovery string) error {
+	e := 0
+	if enabled {
+		e = 1
+	}
+	_, err := s.db.Exec(`UPDATE users SET totp_secret=?, totp_enabled=?, recovery_hashes=? WHERE id=?`,
+		secret, e, recovery, id)
+	return err
+}
+
+func (s *Store) UserByID(id int64) (*User, error) {
+	u, err := scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
+
 // UserByEmail 按邮箱取用户。
 func (s *Store) UserByEmail(email string) (*User, error) {
-	row := s.db.QueryRow(`SELECT id, email, pass_hash, nickname, role, created_at FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(email)))
-	var u User
-	var ts int64
-	if err := row.Scan(&u.ID, &u.Email, &u.PassHash, &u.Nickname, &u.Role, &ts); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, err
+	u, err := scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE email=?`,
+		strings.ToLower(strings.TrimSpace(email))))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
 	}
-	u.CreatedAt = toTime(ts)
-	return &u, nil
+	return u, err
 }
 
 // CountUsers 返回账号总数（用于判断是否需要创建首个管理员）。

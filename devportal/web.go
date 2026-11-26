@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,8 @@ type Server struct {
 	COS   *COS
 	Pub   *Publisher
 	tpl   *template.Template
+	// Mail 是邮箱验证码的发信器；未配置 SMTP 时为 nil，注册流程跳过邮箱验证。
+	Mail *Mailer
 
 	// 注册与登录的限速器：两者都是公开端点，不限速会被脚本刷穿。
 	regLimiter   *rateLimiter
@@ -61,6 +64,7 @@ func newServer(cfg *Config, st *Store, cos *COS) (*Server, error) {
 		chalLimiter:  newRateLimiter(60, 10*time.Minute),
 	}
 	s.Pub = &Publisher{Store: st, COS: cos, Cfg: cfg}
+	s.Mail = newMailer(cfg)
 	return s, nil
 }
 
@@ -97,6 +101,17 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /challenge/verify", s.handleChallengeSubmit)
 	mux.HandleFunc("POST /register", s.handleRegister)
 	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.HandleFunc("GET /verify-email", s.handleVerifyEmailPage)
+	mux.HandleFunc("POST /verify-email", s.handleVerifyEmailSubmit)
+	mux.HandleFunc("POST /verify-email/resend", s.handleResendCode)
+
+	mux.HandleFunc("GET /login/2fa", s.handleTOTPPage)
+	mux.HandleFunc("POST /login/2fa", s.handleTOTPVerify)
+
+	mux.HandleFunc("GET /account", s.requireLogin(s.handleAccount))
+	mux.HandleFunc("GET /account/2fa/setup", s.requireLogin(s.handleTOTPSetup))
+	mux.HandleFunc("POST /account/2fa/enable", s.requireLogin(s.handleTOTPEnable))
+	mux.HandleFunc("POST /account/2fa/disable", s.requireLogin(s.handleTOTPDisable))
 
 	mux.HandleFunc("GET /dashboard", s.requireLogin(s.handleDashboard))
 	mux.HandleFunc("POST /apps", s.requireLogin(s.handleCreateApp))
@@ -127,6 +142,11 @@ func (s *Server) withCommon(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// logf 是服务端日志的统一出口，便于运维从 journalctl 里定位问题。
+func (s *Server) logf(format string, args ...any) {
+	log.Printf(format, args...)
 }
 
 // render 渲染模板页。

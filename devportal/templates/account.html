@@ -1,0 +1,28 @@
+{{template "header" .}}
+{{with .Data}}
+<div class="page-head"><h2>账号安全</h2></div>
+<section class="card">
+  <h3>账号信息</h3>
+  <dl class="kv">
+    <dt>邮箱</dt><dd class="mono">{{.Email}}</dd>
+    <dt>昵称</dt><dd>{{if .Nickname}}{{.Nickname}}{{else}}-{{end}}</dd>
+    <dt>角色</dt><dd>{{if eq .Role "admin"}}管理员{{else}}开发者{{end}}</dd>
+    <dt>注册时间</dt><dd class="muted">{{date .CreatedAt}}</dd>
+  </dl>
+</section>
+<section class="card">
+  <h3>两步验证（TOTP）</h3>
+  {{if .TOTPEnabled}}
+  <p class="muted">已启用。登录时除口令外还需要验证器应用生成的 6 位验证码。</p>
+  <form method="post" action="/account/2fa/disable" class="form mt10">
+    <label>当前验证码<input name="code" inputmode="numeric" maxlength="6" placeholder="输入 6 位验证码"></label>
+    <label>或输入登录口令<input type="password" name="password" autocomplete="current-password" placeholder="二者其一即可"></label>
+    <button class="btn-danger" type="submit">关闭两步验证</button>
+  </form>
+  {{else}}
+  <p class="muted">未启用。开启后即使口令泄露，攻击者也无法登录。</p>
+  <a class="btn mt10" href="/account/2fa/setup">启用两步验证</a>
+  {{end}}
+</section>
+{{end}}
+{{template "footer" .}}

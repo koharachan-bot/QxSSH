@@ -1,0 +1,11 @@
+{{template "header" .}}
+<section class="narrow">
+  <h2>保存恢复码</h2>
+  <div class="flash ok">两步验证已启用。下面的恢复码只显示这一次，请立即保存到安全的地方。</div>
+  <div class="codes">
+    {{range .Data}}<code>{{.}}</code>{{end}}
+  </div>
+  <p class="muted small mt12">每个恢复码只能使用一次。手机丢失时可用它登录，登录后会从列表里移除。</p>
+  <a class="btn mt16" href="/account">我已完成保存</a>
+</section>
+{{template "footer" .}}

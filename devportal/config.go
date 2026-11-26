@@ -38,6 +38,15 @@ type Config struct {
 	MaxUploadMB int64
 	// Registration 控制注册开关：open（默认，带限速）/ closed（只有管理员能开号）。
 	Registration string
+	// 邮箱验证码发信配置。未配置 SMTP 时注册流程跳过邮箱验证。
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPass     string
+	MailFrom     string
+	MailFromName string
+	// RequireEmailVerify 强制新注册账号完成邮箱验证后才能登录。
+	RequireEmailVerify bool
 }
 
 func envStr(key, def string) string {
@@ -64,6 +73,12 @@ func LoadConfig() (*Config, error) {
 		PublicBase:   strings.TrimRight(envStr("STORE_PUBLIC_BASE", ""), "/"),
 		MaxUploadMB:  50,
 		Registration: strings.ToLower(envStr("PORTAL_REGISTRATION", "open")),
+
+		SMTPHost:     envStr("PORTAL_SMTP_HOST", ""),
+		SMTPUser:     envStr("PORTAL_SMTP_USER", ""),
+		SMTPPass:     envStr("PORTAL_SMTP_PASS", ""),
+		MailFrom:     envStr("PORTAL_MAIL_FROM", ""),
+		MailFromName: envStr("PORTAL_MAIL_FROM_NAME", "QxSSH 开发者平台"),
 	}
 	if c.Registration != "open" && c.Registration != "closed" {
 		return nil, errors.New("PORTAL_REGISTRATION 只能是 open 或 closed")
@@ -75,6 +90,21 @@ func LoadConfig() (*Config, error) {
 		}
 		c.MaxUploadMB = n
 	}
+	if v := envStr("PORTAL_SMTP_PORT", ""); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 || n > 65535 {
+			return nil, errors.New("PORTAL_SMTP_PORT 需为 1~65535")
+		}
+		c.SMTPPort = n
+	} else {
+		c.SMTPPort = 465
+	}
+	// 只有同时给了服务器与发件地址才启用邮箱验证，否则不影响注册。
+	c.RequireEmailVerify = c.SMTPHost != "" && c.MailFrom != ""
+	if !c.RequireEmailVerify && envStr("PORTAL_REQUIRE_EMAIL", "") == "1" {
+		return nil, errors.New("PORTAL_REQUIRE_EMAIL=1 需要先配置 PORTAL_SMTP_HOST 与 PORTAL_MAIL_FROM")
+	}
+
 	if c.COSBucket == "" {
 		return nil, errors.New("缺少 COS_BUCKET")
 	}

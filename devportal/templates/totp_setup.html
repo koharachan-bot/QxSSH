@@ -1,0 +1,25 @@
+{{template "header" .}}
+{{with .Data}}
+<section class="narrow">
+  <h2>启用两步验证</h2>
+  <ol class="steps">
+    <li>在验证器应用（Google Authenticator、Microsoft Authenticator、1Password 等）中选择「添加账号 → 输入设置密钥」。</li>
+    <li>填入下面的密钥，账户名填你的邮箱。</li>
+    <li>把应用里生成的 6 位验证码填到下方完成绑定。</li>
+  </ol>
+  <div class="secret-box">
+    <div class="secret-label">密钥（手动输入）</div>
+    <code class="secret-value" id="secret">{{.Secret}}</code>
+  </div>
+  <details class="mt10">
+    <summary class="muted small">otpauth 链接</summary>
+    <code class="small mono break">{{.URI}}</code>
+  </details>
+  <form method="post" action="/account/2fa/enable" class="form mt16">
+    <input type="hidden" name="secret" value="{{.Secret}}">
+    <label>验证码<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="123456" autocomplete="one-time-code" required></label>
+    <button class="btn" type="submit">完成绑定</button>
+  </form>
+</section>
+{{end}}
+{{template "footer" .}}

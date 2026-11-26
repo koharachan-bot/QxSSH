@@ -52,6 +52,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// 登录成功清零，正常用户不会因为之前的失败被锁。
 	s.loginLimiter.reset(ip)
+
+	// 未验证邮箱的账号不能登录，直接引导去验证页。
+	if s.Cfg.RequireEmailVerify && !u.EmailVerified {
+		setPendingEmail(w, r, s.Cfg, u.ID)
+		redirectWith(w, r, "/verify-email", "请先完成邮箱验证", "err")
+		return
+	}
+
+	// 已启用两步验证：先发一张 5 分钟的待验证票，走第二步。
+	if u.TOTPEnabled {
+		setPending(w, r, s.Cfg, u.ID)
+		http.Redirect(w, r, "/login/2fa", http.StatusSeeOther)
+		return
+	}
 	issueSession(w, r, s.Cfg, u.ID)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
@@ -97,6 +111,25 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/register", err.Error(), "err")
 		return
 	}
+
+	// 配置了 SMTP 时，新账号必须先完成邮箱验证才能登录。
+	if s.Cfg.RequireEmailVerify {
+		if err := s.Store.SetEmailVerified(u.ID, false); err != nil {
+			redirectWith(w, r, "/register", "初始化账号状态失败", "err")
+			return
+		}
+		setPendingEmail(w, r, s.Cfg, u.ID)
+		if err := s.sendEmailCode(w, r, u); err != nil {
+			s.logf("发送注册验证码失败 email=%s err=%v", u.Email, err)
+			redirectWith(w, r, "/verify-email", "验证码发送失败，请点击重新发送", "err")
+			return
+		}
+		s.logf("注册验证码已发送 email=%s", u.Email)
+		redirectWith(w, r, "/verify-email", "验证码已发送到你的邮箱", "ok")
+		return
+	}
+
+	s.loginLimiter.reset(clientIP(r))
 	issueSession(w, r, s.Cfg, u.ID)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }

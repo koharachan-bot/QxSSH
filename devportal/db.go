@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -18,6 +19,15 @@ type User struct {
 	Nickname  string
 	Role      string
 	CreatedAt time.Time
+
+	// TOTPSecret 是 base32 密钥；TOTPEnabled 为真时登录需要验证码。
+	TOTPSecret   string
+	TOTPEnabled  bool
+	// RecoveryHashes 是逗号分隔的恢复码哈希，一次性使用。
+	RecoveryHashes string
+
+	// EmailVerified 为假时账号还未通过邮箱验证（无法登录）。
+	EmailVerified bool
 }
 
 // App 是一个应用条目：开发者提交、管理员审核、通过后上架。
@@ -108,11 +118,24 @@ func (s *Store) migrate() error {
 			published_at INTEGER,
 			UNIQUE(app_id)
 		)`,
+		// 2FA 字段：用 ALTER 追加，已存在时忽略错误（迁移必须幂等）。
+		`ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN recovery_hashes TEXT NOT NULL DEFAULT ''`,
+		// 已有账号视为已验证（默认 1），新注册时显式写 0。
+		`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE users ADD COLUMN email_code TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN email_code_exp INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN email_code_tries INTEGER NOT NULL DEFAULT 0`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_status ON apps(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_apps_owner ON apps(owner_id)`,
 	}
 	for _, q := range stmts {
 		if _, err := s.db.Exec(q); err != nil {
+			// ALTER TABLE ... ADD COLUMN 在列已存在时会报错，属于正常的重复迁移。
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
 			return fmt.Errorf("迁移数据库失败：%w", err)
 		}
 	}
